@@ -1,0 +1,6 @@
+@ExcellyGenLMS.API_HostAddress = http://localhost:5177
+
+GET {{ExcellyGenLMS.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
