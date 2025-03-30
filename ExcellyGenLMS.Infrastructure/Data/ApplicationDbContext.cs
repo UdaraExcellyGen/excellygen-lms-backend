@@ -19,12 +19,14 @@ namespace ExcellyGenLMS.Infrastructure.Data
         public DbSet<ForumThread> ForumThreads { get; set; }
         public DbSet<ThreadComment> ThreadComments { get; set; }
         public DbSet<ThreadComReply> ThreadComReplies { get; set; }
+        public DbSet<CV> CVs { get; set; }
+        public DbSet<Badge> Badges { get; set; } // Added the Badge DbSet
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
 
-          
+
             modelBuilder.Entity<User>()
                 .Property(e => e.Roles)
                 .HasConversion(
@@ -32,29 +34,29 @@ namespace ExcellyGenLMS.Infrastructure.Data
                     v => System.Text.Json.JsonSerializer.Deserialize<List<string>>(v, new System.Text.Json.JsonSerializerOptions()) ?? new List<string>()
                 );
 
-            
+
             modelBuilder.Entity<CourseCategory>()
                 .HasKey(e => e.Id);
 
-            
+
             modelBuilder.Entity<Technology>()
                 .HasKey(e => e.Id);
 
             modelBuilder.Entity<ForumThread>()
                 .HasKey(e => e.ThreadId);
 
-            
+
             modelBuilder.Entity<ThreadComment>()
                 .HasKey(e => e.Id);
 
-          
+
             modelBuilder.Entity<ThreadComment>()
                 .HasOne(c => c.Thread)
                 .WithMany()
                 .HasForeignKey(c => c.ThreadId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-           
+
             modelBuilder.Entity<ThreadComReply>()
                 .HasKey(e => e.Id);
 
@@ -62,14 +64,22 @@ namespace ExcellyGenLMS.Infrastructure.Data
                 .HasOne(r => r.Thread)
                 .WithMany()
                 .HasForeignKey(r => r.ThreadId)
-                .OnDelete(DeleteBehavior.NoAction); 
+                .OnDelete(DeleteBehavior.NoAction);
 
-           
+
             modelBuilder.Entity<ThreadComReply>()
                 .HasOne(r => r.Comment)
                 .WithMany()
                 .HasForeignKey(r => r.CommentId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            // Configure CV entity
+            modelBuilder.Entity<CV>()
+                .HasKey(e => e.CvId);
+
+            // Configure Badge entity
+            modelBuilder.Entity<Badge>()
+                .HasKey(e => e.Id);
         }
     }
 }
