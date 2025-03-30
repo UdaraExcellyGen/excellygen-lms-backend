@@ -1,8 +1,12 @@
 using Microsoft.EntityFrameworkCore;
 using ExcellyGenLMS.Core.Entities.Auth;
 using ExcellyGenLMS.Core.Entities.Admin;
+
+using ExcellyGenLMS.Core.Entities.Learner;
+
 using ExcellyGenLMS.Core.Entities.Notifications;
 using ExcellyGenLMS.Core.Entities.Course; // Make sure this namespace is included
+
 using System.Collections.Generic;
 
 namespace ExcellyGenLMS.Infrastructure.Data
@@ -17,6 +21,13 @@ namespace ExcellyGenLMS.Infrastructure.Data
         public DbSet<User> Users { get; set; }
         public DbSet<CourseCategory> CourseCategories { get; set; }
         public DbSet<Technology> Technologies { get; set; }
+
+        public DbSet<ForumThread> ForumThreads { get; set; }
+        public DbSet<ThreadComment> ThreadComments { get; set; }
+        public DbSet<ThreadComReply> ThreadComReplies { get; set; }
+        public DbSet<CV> CVs { get; set; }
+        public DbSet<Badge> Badges { get; set; } // Added the Badge DbSet
+
         public DbSet<Notification> Notifications { get; set; }
         public DbSet<Course> Courses { get; set; }
         public DbSet<Lesson> Lessons { get; set; }
@@ -28,11 +39,12 @@ namespace ExcellyGenLMS.Infrastructure.Data
         public DbSet<Enrollment> Enrollments { get; set; }
         public DbSet<Certificate> Certificates { get; set; } // Add this line to include Certificate DbSet
 
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
 
-            // Configure User entity
+
             modelBuilder.Entity<User>()
                 .Property(e => e.Roles)
                 .HasConversion(
@@ -40,12 +52,52 @@ namespace ExcellyGenLMS.Infrastructure.Data
                     v => System.Text.Json.JsonSerializer.Deserialize<List<string>>(v, new System.Text.Json.JsonSerializerOptions()) ?? new List<string>()
                 );
 
-            // Configure CourseCategory entity
+
             modelBuilder.Entity<CourseCategory>()
                 .HasKey(e => e.Id);
 
-            // Configure Technology entity
+
             modelBuilder.Entity<Technology>()
+                .HasKey(e => e.Id);
+
+
+            modelBuilder.Entity<ForumThread>()
+                .HasKey(e => e.ThreadId);
+
+
+            modelBuilder.Entity<ThreadComment>()
+                .HasKey(e => e.Id);
+
+
+            modelBuilder.Entity<ThreadComment>()
+                .HasOne(c => c.Thread)
+                .WithMany()
+                .HasForeignKey(c => c.ThreadId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+
+            modelBuilder.Entity<ThreadComReply>()
+                .HasKey(e => e.Id);
+
+            modelBuilder.Entity<ThreadComReply>()
+                .HasOne(r => r.Thread)
+                .WithMany()
+                .HasForeignKey(r => r.ThreadId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+
+            modelBuilder.Entity<ThreadComReply>()
+                .HasOne(r => r.Comment)
+                .WithMany()
+                .HasForeignKey(r => r.CommentId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Configure CV entity
+            modelBuilder.Entity<CV>()
+                .HasKey(e => e.CvId);
+
+            // Configure Badge entity
+            modelBuilder.Entity<Badge>()
                 .HasKey(e => e.Id);
 
             // Configure Notification entity
@@ -130,6 +182,7 @@ namespace ExcellyGenLMS.Infrastructure.Data
 
             // Configure Certificate entity (Add this section)
             modelBuilder.Entity<Certificate>(); // Basic configuration for Certificate entity.
+
         }
     }
 }
