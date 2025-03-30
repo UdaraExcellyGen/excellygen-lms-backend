@@ -4,6 +4,7 @@ using ExcellyGenLMS.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace ExcellyGenLMS.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250330105758_Lesson-CourseDocumentTable-Relationships-s")]
+    partial class LessonCourseDocumentTableRelationshipss
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -130,34 +133,6 @@ namespace ExcellyGenLMS.Infrastructure.Migrations
                     b.ToTable("Users");
                 });
 
-            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Course.Certificate", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasColumnName("certificate_id");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<byte[]>("CertificateData")
-                        .IsRequired()
-                        .HasColumnType("varbinary(max)")
-                        .HasColumnName("certificate_data");
-
-                    b.Property<DateTime>("CompletionDate")
-                        .HasColumnType("datetime2")
-                        .HasColumnName("completion_date");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)")
-                        .HasColumnName("certificate_title");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("Certificates");
-                });
-
             modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Course.Course", b =>
                 {
                     b.Property<int>("Id")
@@ -233,28 +208,6 @@ namespace ExcellyGenLMS.Infrastructure.Migrations
                     b.ToTable("CourseDocuments");
                 });
 
-            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Course.Enrollment", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasColumnName("enrollment_id");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("Date")
-                        .HasColumnType("datetime2")
-                        .HasColumnName("enrollment_date");
-
-                    b.Property<TimeSpan>("Time")
-                        .HasColumnType("time")
-                        .HasColumnName("enrollment_time");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("Enrollments");
-                });
-
             modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Course.Lesson", b =>
                 {
                     b.Property<int>("Id")
@@ -282,132 +235,6 @@ namespace ExcellyGenLMS.Infrastructure.Migrations
                     b.HasIndex("CourseId");
 
                     b.ToTable("Lessons");
-                });
-
-            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Course.MCQQuestionOption", b =>
-                {
-                    b.Property<int>("McqOptionId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasColumnName("mcq_option_id");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("McqOptionId"));
-
-                    b.Property<bool>("IsCorrect")
-                        .HasColumnType("bit")
-                        .HasColumnName("is_correct");
-
-                    b.Property<string>("OptionText")
-                        .IsRequired()
-                        .HasColumnType("TEXT")
-                        .HasColumnName("option_text");
-
-                    b.Property<int>("QuizBankQuestionId")
-                        .HasColumnType("int")
-                        .HasColumnName("quiz_bank_question_id");
-
-                    b.HasKey("McqOptionId");
-
-                    b.HasIndex("QuizBankQuestionId");
-
-                    b.ToTable("MCQQuestionOptions");
-                });
-
-            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Course.Quiz", b =>
-                {
-                    b.Property<int>("QuizId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasColumnName("quiz_id");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("QuizId"));
-
-                    b.Property<int>("LessonId")
-                        .HasColumnType("int")
-                        .HasColumnName("lesson_id");
-
-                    b.Property<int>("QuizBankId")
-                        .HasColumnType("int")
-                        .HasColumnName("quiz_bank_id");
-
-                    b.Property<int>("QuizSize")
-                        .HasColumnType("int")
-                        .HasColumnName("quiz_size");
-
-                    b.Property<string>("QuizTitle")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)")
-                        .HasColumnName("quiz_title");
-
-                    b.Property<int>("TimeLimitMinutes")
-                        .HasColumnType("int")
-                        .HasColumnName("time_limit_minutes");
-
-                    b.Property<int>("TotalMarks")
-                        .HasColumnType("int")
-                        .HasColumnName("total_marks");
-
-                    b.HasKey("QuizId");
-
-                    b.HasIndex("LessonId");
-
-                    b.HasIndex("QuizBankId");
-
-                    b.ToTable("Quizzes");
-                });
-
-            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Course.QuizBank", b =>
-                {
-                    b.Property<int>("QuizBankId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasColumnName("quiz_bank_id");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("QuizBankId"));
-
-                    b.Property<int>("QuizBankSize")
-                        .HasColumnType("int")
-                        .HasColumnName("quiz_bank_size");
-
-                    b.HasKey("QuizBankId");
-
-                    b.ToTable("QuizBanks");
-                });
-
-            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Course.QuizBankQuestion", b =>
-                {
-                    b.Property<int>("QuizBankQuestionId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasColumnName("quiz_bank_question_id");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("QuizBankQuestionId"));
-
-                    b.Property<int?>("QuestionBankOrder")
-                        .HasColumnType("int")
-                        .HasColumnName("question_bank_order");
-
-                    b.Property<string>("QuestionContent")
-                        .IsRequired()
-                        .HasColumnType("TEXT")
-                        .HasColumnName("question_content");
-
-                    b.Property<string>("QuestionType")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)")
-                        .HasColumnName("question_type");
-
-                    b.Property<int>("QuizBankId")
-                        .HasColumnType("int")
-                        .HasColumnName("quiz_bank_id");
-
-                    b.HasKey("QuizBankQuestionId");
-
-                    b.HasIndex("QuizBankId");
-
-                    b.ToTable("QuizBankQuestions");
                 });
 
             modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Notifications.Notification", b =>
@@ -497,47 +324,6 @@ namespace ExcellyGenLMS.Infrastructure.Migrations
                     b.Navigation("Course");
                 });
 
-            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Course.MCQQuestionOption", b =>
-                {
-                    b.HasOne("ExcellyGenLMS.Core.Entities.Course.QuizBankQuestion", "QuizBankQuestion")
-                        .WithMany("MCQQuestionOptions")
-                        .HasForeignKey("QuizBankQuestionId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("QuizBankQuestion");
-                });
-
-            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Course.Quiz", b =>
-                {
-                    b.HasOne("ExcellyGenLMS.Core.Entities.Course.Lesson", "Lesson")
-                        .WithMany()
-                        .HasForeignKey("LessonId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("ExcellyGenLMS.Core.Entities.Course.QuizBank", "QuizBank")
-                        .WithMany("Quizzes")
-                        .HasForeignKey("QuizBankId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Lesson");
-
-                    b.Navigation("QuizBank");
-                });
-
-            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Course.QuizBankQuestion", b =>
-                {
-                    b.HasOne("ExcellyGenLMS.Core.Entities.Course.QuizBank", "QuizBank")
-                        .WithMany("QuizBankQuestions")
-                        .HasForeignKey("QuizBankId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("QuizBank");
-                });
-
             modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Course.Course", b =>
                 {
                     b.Navigation("Lessons");
@@ -546,18 +332,6 @@ namespace ExcellyGenLMS.Infrastructure.Migrations
             modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Course.Lesson", b =>
                 {
                     b.Navigation("Documents");
-                });
-
-            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Course.QuizBank", b =>
-                {
-                    b.Navigation("QuizBankQuestions");
-
-                    b.Navigation("Quizzes");
-                });
-
-            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Course.QuizBankQuestion", b =>
-                {
-                    b.Navigation("MCQQuestionOptions");
                 });
 #pragma warning restore 612, 618
         }

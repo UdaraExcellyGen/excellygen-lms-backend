@@ -4,6 +4,7 @@ using ExcellyGenLMS.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace ExcellyGenLMS.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250330132732_QuizModule-table-s")]
+    partial class QuizModuletables
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -130,34 +133,6 @@ namespace ExcellyGenLMS.Infrastructure.Migrations
                     b.ToTable("Users");
                 });
 
-            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Course.Certificate", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasColumnName("certificate_id");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<byte[]>("CertificateData")
-                        .IsRequired()
-                        .HasColumnType("varbinary(max)")
-                        .HasColumnName("certificate_data");
-
-                    b.Property<DateTime>("CompletionDate")
-                        .HasColumnType("datetime2")
-                        .HasColumnName("completion_date");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)")
-                        .HasColumnName("certificate_title");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("Certificates");
-                });
-
             modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Course.Course", b =>
                 {
                     b.Property<int>("Id")
@@ -231,28 +206,6 @@ namespace ExcellyGenLMS.Infrastructure.Migrations
                     b.HasIndex("LessonId");
 
                     b.ToTable("CourseDocuments");
-                });
-
-            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Course.Enrollment", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasColumnName("enrollment_id");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("Date")
-                        .HasColumnType("datetime2")
-                        .HasColumnName("enrollment_date");
-
-                    b.Property<TimeSpan>("Time")
-                        .HasColumnType("time")
-                        .HasColumnName("enrollment_time");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("Enrollments");
                 });
 
             modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Course.Lesson", b =>
