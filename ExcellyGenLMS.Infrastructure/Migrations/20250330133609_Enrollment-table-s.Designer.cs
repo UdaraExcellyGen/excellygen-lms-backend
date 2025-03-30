@@ -4,6 +4,7 @@ using ExcellyGenLMS.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace ExcellyGenLMS.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250330133609_Enrollment-table-s")]
+    partial class Enrollmenttables
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -130,110 +133,6 @@ namespace ExcellyGenLMS.Infrastructure.Migrations
                     b.ToTable("Users");
                 });
 
-
-            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Learner.Badge", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<DateTime?>("EarnedDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Image")
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("Badges");
-                });
-
-            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Learner.CV", b =>
-                {
-                    b.Property<int>("CvId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("CvId"));
-
-                    b.Property<DateTime>("CreatedDate")
-                        .HasColumnType("datetime2");
-
-                    b.HasKey("CvId");
-
-                    b.ToTable("CVs");
-                });
-
-            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Learner.ForumThread", b =>
-                {
-                    b.Property<int>("ThreadId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("ThreadId"));
-
-                    b.Property<string>("Category")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Content")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Creator")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime>("Date")
-                        .HasColumnType("datetime2");
-
-                    b.HasKey("ThreadId");
-
-                    b.ToTable("ForumThreads");
-                });
-
-            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Learner.ThreadComReply", b =>
-
-            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Course.Certificate", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasColumnName("certificate_id");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<byte[]>("CertificateData")
-                        .IsRequired()
-                        .HasColumnType("varbinary(max)")
-                        .HasColumnName("certificate_data");
-
-                    b.Property<DateTime>("CompletionDate")
-                        .HasColumnType("datetime2")
-                        .HasColumnName("completion_date");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)")
-                        .HasColumnName("certificate_title");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("Certificates");
-                });
-
             modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Course.Course", b =>
                 {
                     b.Property<int>("Id")
@@ -332,30 +231,12 @@ namespace ExcellyGenLMS.Infrastructure.Migrations
                 });
 
             modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Course.Lesson", b =>
-
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-
-                    b.Property<int>("CommentId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Commentor")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Content")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime>("Date")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int>("ThreadId")
 
                     b.Property<int>("CourseId")
                         .HasColumnType("int");
@@ -369,76 +250,9 @@ namespace ExcellyGenLMS.Infrastructure.Migrations
                         .HasColumnType("nvarchar(200)");
 
                     b.Property<int>("LessonPoints")
-
                         .HasColumnType("int");
 
                     b.HasKey("Id");
-
-
-                    b.HasIndex("CommentId");
-
-                    b.HasIndex("ThreadId");
-
-                    b.ToTable("ThreadComReplies");
-                });
-
-            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Learner.ThreadComment", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("Commentor")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Content")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime>("Date")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int>("ThreadId")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ThreadId");
-
-                    b.ToTable("ThreadComments");
-                });
-
-            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Learner.ThreadComReply", b =>
-                {
-                    b.HasOne("ExcellyGenLMS.Core.Entities.Learner.ThreadComment", "Comment")
-                        .WithMany()
-                        .HasForeignKey("CommentId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("ExcellyGenLMS.Core.Entities.Learner.ForumThread", "Thread")
-                        .WithMany()
-                        .HasForeignKey("ThreadId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-
-                    b.Navigation("Comment");
-
-                    b.Navigation("Thread");
-                });
-
-            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Learner.ThreadComment", b =>
-                {
-                    b.HasOne("ExcellyGenLMS.Core.Entities.Learner.ForumThread", "Thread")
-                        .WithMany()
-                        .HasForeignKey("ThreadId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Thread");
 
                     b.HasIndex("CourseId");
 
@@ -719,7 +533,6 @@ namespace ExcellyGenLMS.Infrastructure.Migrations
             modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Course.QuizBankQuestion", b =>
                 {
                     b.Navigation("MCQQuestionOptions");
-
                 });
 #pragma warning restore 612, 618
         }
