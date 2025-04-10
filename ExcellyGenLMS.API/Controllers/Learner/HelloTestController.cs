@@ -9,7 +9,7 @@ namespace ExcellyGenLMS.API.Controllers.Learner
         [HttpGet("ping")]
         public IActionResult Ping()
         {
-            return Ok("Ping successful! This is a test endpoint to verify GitHub commits try again.");
+            return Ok("Ping successful! This is a test endpoint to verify GitHub and Jira.");
         }
     }
 }
