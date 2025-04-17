@@ -1,6 +1,4 @@
 using ExcellyGenLMS.Application.DTOs.Auth;
-using System.Collections.Generic;
-using System.Threading.Tasks;
 
 namespace ExcellyGenLMS.Application.Interfaces.Auth
 {
@@ -13,5 +11,7 @@ namespace ExcellyGenLMS.Application.Interfaces.Auth
         Task DeleteUserAsync(string id);
         Task<UserDto> ToggleUserStatusAsync(string id);
         Task<List<UserDto>> SearchUsersAsync(UserSearchParams searchParams);
+        string GetUserIdFromToken(string token);
+        string GetCurrentRoleFromToken(string token);
     }
 }
