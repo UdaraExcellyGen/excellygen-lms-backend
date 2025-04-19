@@ -1,10 +1,17 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
+using FirebaseAdmin;
+using Google.Apis.Auth.OAuth2;
 using ExcellyGenLMS.Infrastructure.Data;
 using ExcellyGenLMS.Core.Interfaces.Repositories.Auth;
 using ExcellyGenLMS.Infrastructure.Data.Repositories.Auth;
 using ExcellyGenLMS.Application.Interfaces.Auth;
 using ExcellyGenLMS.Application.Services.Auth;
+using ExcellyGenLMS.Infrastructure.Services.Auth;
 using Microsoft.OpenApi.Models;
+using ExcellyGenLMS.API.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -12,21 +19,109 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// Add CORS
+// Add CORS with specific localhost origins
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowReactApp",
-        builder => builder
-            .AllowAnyOrigin()
-            .AllowAnyMethod()
-            .AllowAnyHeader());
+        policyBuilder =>
+        {
+            policyBuilder
+                .WithOrigins(
+                    "http://localhost:5173",  // Vite development server
+                    "http://localhost:3000",  // React standard port
+                    "https://excelly-lms-f3500.web.app"  // Production
+                )
+                .AllowAnyMethod()
+                .AllowAnyHeader()
+                .AllowCredentials();
+        });
+});
+
+// Initialize Firebase Admin
+if (FirebaseApp.DefaultInstance == null)
+{
+    try
+    {
+        var serviceAccountKeyPath = builder.Configuration["Firebase:ServiceAccountKeyPath"];
+        if (string.IsNullOrEmpty(serviceAccountKeyPath))
+        {
+            // Fallback to default location
+            serviceAccountKeyPath = "firebase-service-account.json";
+        }
+
+        Console.WriteLine($"Using service account key at: {serviceAccountKeyPath}");
+
+        if (!System.IO.File.Exists(serviceAccountKeyPath))
+        {
+            throw new FileNotFoundException($"Service account file not found at {serviceAccountKeyPath}");
+        }
+
+        FirebaseApp.Create(new AppOptions
+        {
+            Credential = GoogleCredential.FromFile(serviceAccountKeyPath)
+        });
+
+        Console.WriteLine("Firebase Admin SDK initialized successfully.");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Error initializing Firebase Admin: {ex.Message}");
+        if (ex.InnerException != null)
+        {
+            Console.WriteLine($"Inner exception: {ex.InnerException.Message}");
+        }
+    }
+}
+
+// Setup JWT Authentication
+var jwtKey = builder.Configuration["Jwt:Secret"] ?? throw new InvalidOperationException("JWT Secret is not configured");
+var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "ExcellyGenLMS";
+var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "ExcellyGenLMS.Client";
+
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = true,
+        ValidateAudience = true,
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true,
+        ValidIssuer = jwtIssuer,
+        ValidAudience = jwtAudience,
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
+        ClockSkew = TimeSpan.Zero // Reduce the default clock skew of 5 minutes
+    };
+
+    options.Events = new JwtBearerEvents
+    {
+        OnAuthenticationFailed = context =>
+        {
+            if (context.Exception.GetType() == typeof(SecurityTokenExpiredException))
+            {
+                context.Response.Headers["Token-Expired"] = "true";
+            }
+            Console.WriteLine($"JWT Authentication failed: {context.Exception.Message}");
+            return Task.CompletedTask;
+        }
+    };
 });
 
 // Register repositories
 builder.Services.AddScoped<IUserRepository, UserRepository>();
+builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
+// Register other repositories...
 
 // Register services
 builder.Services.AddScoped<IUserService, UserService>();
+builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IFirebaseAuthService, FirebaseAuthService>();
+builder.Services.AddScoped<ITokenService, TokenService>();
+// Register other services...
 
 // Add controllers
 builder.Services.AddControllers();
@@ -36,6 +131,31 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "ExcellyGenLMS API", Version = "v1" });
+
+    // Add JWT Authentication to Swagger
+    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Description = "JWT Authorization header using the Bearer scheme. Example: \"Authorization: Bearer {token}\"",
+        Name = "Authorization",
+        In = ParameterLocation.Header,
+        Type = SecuritySchemeType.ApiKey,
+        Scheme = "Bearer"
+    });
+
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            Array.Empty<string>()
+        }
+    });
 });
 
 var app = builder.Build();
@@ -48,8 +168,13 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+// Apply CORS middleware BEFORE authentication middleware
 app.UseCors("AllowReactApp");
+
+app.UseAuthentication();
 app.UseAuthorization();
+app.UseRoleAuthorization();
 app.MapControllers();
 
 app.Run();

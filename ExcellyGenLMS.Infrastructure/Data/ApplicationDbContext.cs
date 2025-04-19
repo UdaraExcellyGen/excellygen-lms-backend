@@ -1,13 +1,13 @@
 using Microsoft.EntityFrameworkCore;
 using ExcellyGenLMS.Core.Entities.Auth;
 using ExcellyGenLMS.Core.Entities.Admin;
-
 using ExcellyGenLMS.Core.Entities.Learner;
-
+using ExcellyGenLMS.Core.Entities.Course;
 using ExcellyGenLMS.Core.Entities.Notifications;
-using ExcellyGenLMS.Core.Entities.Course; // Make sure this namespace is included
-
-using System.Collections.Generic;
+using System.Text.Json;
+using System.Linq;
+using System;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 
 namespace ExcellyGenLMS.Infrastructure.Data
 {
@@ -18,17 +18,25 @@ namespace ExcellyGenLMS.Infrastructure.Data
         {
         }
 
+        // Auth Module
         public DbSet<User> Users { get; set; }
+        public DbSet<RefreshToken> RefreshTokens { get; set; }
+
+        // Admin Module
         public DbSet<CourseCategory> CourseCategories { get; set; }
         public DbSet<Technology> Technologies { get; set; }
 
+        // Learner Module
         public DbSet<ForumThread> ForumThreads { get; set; }
         public DbSet<ThreadComment> ThreadComments { get; set; }
         public DbSet<ThreadComReply> ThreadComReplies { get; set; }
         public DbSet<CV> CVs { get; set; }
-        public DbSet<Badge> Badges { get; set; } // Added the Badge DbSet
+        public DbSet<Badge> Badges { get; set; }
 
+        // Notification Module
         public DbSet<Notification> Notifications { get; set; }
+
+        // Course Module
         public DbSet<Course> Courses { get; set; }
         public DbSet<Lesson> Lessons { get; set; }
         public DbSet<CourseDocument> CourseDocuments { get; set; }
@@ -37,37 +45,57 @@ namespace ExcellyGenLMS.Infrastructure.Data
         public DbSet<QuizBank> QuizBanks { get; set; }
         public DbSet<QuizBankQuestion> QuizBankQuestions { get; set; }
         public DbSet<Enrollment> Enrollments { get; set; }
-        public DbSet<Certificate> Certificates { get; set; } // Add this line to include Certificate DbSet
-
+        public DbSet<Certificate> Certificates { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
 
-
+            // Configure User entity with improved JSON serialization
             modelBuilder.Entity<User>()
                 .Property(e => e.Roles)
                 .HasConversion(
-                    v => System.Text.Json.JsonSerializer.Serialize(v, new System.Text.Json.JsonSerializerOptions()),
-                    v => System.Text.Json.JsonSerializer.Deserialize<List<string>>(v, new System.Text.Json.JsonSerializerOptions()) ?? new List<string>()
+                    v => JsonSerializer.Serialize(v, new JsonSerializerOptions { WriteIndented = false }),
+                    v => JsonSerializer.Deserialize<List<string>>(v, new JsonSerializerOptions()) ?? new List<string>()
+                )
+                .HasColumnType("nvarchar(max)");
+
+            // Add a value comparer for Roles collection to fix EF Core warning
+            modelBuilder.Entity<User>()
+                .Property(e => e.Roles)
+                .Metadata.SetValueComparer(
+                    new ValueComparer<List<string>>(
+                        (c1, c2) => c1.SequenceEqual(c2),
+                        c => c.Aggregate(0, (a, v) => HashCode.Combine(a, v.GetHashCode())),
+                        c => c.ToList()
+                    )
                 );
 
+            // Configure RefreshToken entity
+            modelBuilder.Entity<RefreshToken>()
+                .HasKey(e => e.Id);
 
+            modelBuilder.Entity<RefreshToken>()
+                .HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Configure CourseCategory entity
             modelBuilder.Entity<CourseCategory>()
                 .HasKey(e => e.Id);
 
-
+            // Configure Technology entity
             modelBuilder.Entity<Technology>()
                 .HasKey(e => e.Id);
 
-
+            // Configure ForumThread entity
             modelBuilder.Entity<ForumThread>()
                 .HasKey(e => e.ThreadId);
 
-
+            // Configure ThreadComment entity
             modelBuilder.Entity<ThreadComment>()
                 .HasKey(e => e.Id);
-
 
             modelBuilder.Entity<ThreadComment>()
                 .HasOne(c => c.Thread)
@@ -75,7 +103,7 @@ namespace ExcellyGenLMS.Infrastructure.Data
                 .HasForeignKey(c => c.ThreadId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-
+            // Configure ThreadComReply entity
             modelBuilder.Entity<ThreadComReply>()
                 .HasKey(e => e.Id);
 
@@ -84,7 +112,6 @@ namespace ExcellyGenLMS.Infrastructure.Data
                 .WithMany()
                 .HasForeignKey(r => r.ThreadId)
                 .OnDelete(DeleteBehavior.NoAction);
-
 
             modelBuilder.Entity<ThreadComReply>()
                 .HasOne(r => r.Comment)
@@ -180,9 +207,8 @@ namespace ExcellyGenLMS.Infrastructure.Data
             // Configure Enrollment entity
             modelBuilder.Entity<Enrollment>();
 
-            // Configure Certificate entity (Add this section)
-            modelBuilder.Entity<Certificate>(); // Basic configuration for Certificate entity.
-
+            // Configure Certificate entity
+            modelBuilder.Entity<Certificate>();
         }
     }
 }

@@ -1,21 +1,22 @@
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 using ExcellyGenLMS.Application.DTOs.Auth;
 using ExcellyGenLMS.Application.Interfaces.Auth;
 using ExcellyGenLMS.Core.Entities.Auth;
 using ExcellyGenLMS.Core.Interfaces.Repositories.Auth;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 
 namespace ExcellyGenLMS.Application.Services.Auth
 {
     public class UserService : IUserService
     {
         private readonly IUserRepository _userRepository;
+        private readonly ITokenService _tokenService;
 
-        public UserService(IUserRepository userRepository)
+        public UserService(IUserRepository userRepository, ITokenService tokenService)
         {
             _userRepository = userRepository;
+            _tokenService = tokenService;
         }
 
         public async Task<List<UserDto>> GetAllUsersAsync()
@@ -53,7 +54,7 @@ namespace ExcellyGenLMS.Application.Services.Auth
                 Department = createUserDto.Department,
                 Status = "active",  // Set default status to active
                 JoinedDate = DateTime.UtcNow  // Set joined date to current time
-                                              // Firebase UID would be set after authentication
+                // Firebase UID would be set after authentication
             };
 
             var createdUser = await _userRepository.CreateUserAsync(user);
@@ -139,6 +140,16 @@ namespace ExcellyGenLMS.Application.Services.Auth
                 FirebaseUid = user.FirebaseUid,
                 Avatar = user.Avatar
             };
+        }
+
+        public string GetUserIdFromToken(string token)
+        {
+            return _tokenService.GetUserIdFromToken(token);
+        }
+
+        public string GetCurrentRoleFromToken(string token)
+        {
+            return _tokenService.GetCurrentRoleFromToken(token);
         }
     }
 }

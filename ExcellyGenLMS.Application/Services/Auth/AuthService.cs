@@ -1,0 +1,374 @@
+using Microsoft.Extensions.Configuration;
+using Firebase.Auth;
+using ExcellyGenLMS.Application.DTOs.Auth;
+using ExcellyGenLMS.Application.Interfaces.Auth;
+using ExcellyGenLMS.Core.Entities.Auth;
+using ExcellyGenLMS.Core.Interfaces.Repositories.Auth;
+using System.Security.Authentication;
+using System.IdentityModel.Tokens.Jwt;
+using Microsoft.IdentityModel.Tokens;
+
+namespace ExcellyGenLMS.Application.Services.Auth
+{
+	public class AuthService : IAuthService
+	{
+		private readonly IUserRepository _userRepository;
+		private readonly IRefreshTokenRepository _refreshTokenRepository;
+		private readonly IFirebaseAuthService _firebaseAuthService;
+		private readonly ITokenService _tokenService;
+		private readonly IConfiguration _configuration;
+
+		public AuthService(
+			IUserRepository userRepository,
+			IRefreshTokenRepository refreshTokenRepository,
+			IFirebaseAuthService firebaseAuthService,
+			ITokenService tokenService,
+			IConfiguration configuration)
+		{
+			_userRepository = userRepository;
+			_refreshTokenRepository = refreshTokenRepository;
+			_firebaseAuthService = firebaseAuthService;
+			_tokenService = tokenService;
+			_configuration = configuration;
+		}
+
+		public async Task<TokenDto> LoginAsync(LoginDto loginDto)
+		{
+			try
+			{
+				Console.WriteLine($"Login attempt for: {loginDto.Email}");
+
+				// First find the user in our database by email
+				var user = await _userRepository.GetUserByEmailAsync(loginDto.Email);
+
+				if (user == null)
+				{
+					Console.WriteLine("User not found in database");
+					throw new AuthenticationException("User not found");
+				}
+
+				if (user.Status != "active")
+				{
+					Console.WriteLine("User is inactive");
+					throw new AuthenticationException("User is inactive");
+				}
+
+				// Use Firebase token if provided, otherwise use email/password
+				if (!string.IsNullOrEmpty(loginDto.FirebaseToken))
+				{
+					Console.WriteLine("Using Firebase token for authentication");
+					try
+					{
+						bool isValid = await _firebaseAuthService.VerifyTokenAsync(loginDto.FirebaseToken);
+						if (!isValid)
+						{
+							Console.WriteLine("Firebase token verification failed");
+							throw new AuthenticationException("Invalid Firebase token");
+						}
+
+						// Get Firebase UID from token
+						var firebaseUid = await _firebaseAuthService.GetUserIdFromTokenAsync(loginDto.FirebaseToken);
+						Console.WriteLine($"Firebase token verified successfully. UID: {firebaseUid}");
+
+						// Update Firebase UID if it's not set
+						if (string.IsNullOrEmpty(user.FirebaseUid))
+						{
+							Console.WriteLine("Updating Firebase UID");
+							user.FirebaseUid = firebaseUid;
+							await _userRepository.UpdateUserAsync(user);
+						}
+					}
+					catch (Exception ex)
+					{
+						Console.WriteLine($"Firebase token verification error: {ex.Message}");
+						throw new AuthenticationException($"Firebase authentication failed: {ex.Message}");
+					}
+				}
+				else if (!string.IsNullOrEmpty(loginDto.Password))
+				{
+					Console.WriteLine("Using email/password for Firebase authentication");
+					try
+					{
+						// Authenticate with Firebase
+						var firebaseClient = new FirebaseAuthClient(new FirebaseAuthConfig
+						{
+							ApiKey = _configuration["Firebase:ApiKey"] ?? throw new InvalidOperationException("Firebase API key is not configured")
+						});
+
+						Console.WriteLine("Attempting Firebase sign-in");
+						var firebaseAuth = await firebaseClient.SignInWithEmailAndPasswordAsync(loginDto.Email, loginDto.Password);
+						Console.WriteLine($"Firebase authentication successful. UID: {firebaseAuth.User.Uid}");
+
+						// Update Firebase UID if it's not set
+						if (string.IsNullOrEmpty(user.FirebaseUid))
+						{
+							Console.WriteLine("Updating Firebase UID");
+							user.FirebaseUid = firebaseAuth.User.Uid;
+							await _userRepository.UpdateUserAsync(user);
+						}
+					}
+					catch (Exception ex)
+					{
+						Console.WriteLine($"Firebase authentication error: {ex.Message}");
+						throw new AuthenticationException($"Firebase authentication failed: {ex.Message}");
+					}
+				}
+				else
+				{
+					Console.WriteLine("No authentication method provided");
+					throw new AuthenticationException("No authentication method provided");
+				}
+
+				// Determine the default role if the user has multiple roles
+				Console.WriteLine("Finding default role");
+				string defaultRole = user.Roles.FirstOrDefault() ?? throw new AuthenticationException("User has no roles");
+
+				Console.WriteLine($"Default role: {defaultRole}");
+
+				// Generate JWT tokens
+				Console.WriteLine("Generating JWT tokens");
+				var tokenDto = _tokenService.GenerateTokens(user, defaultRole);
+
+				// Create and save refresh token
+				Console.WriteLine("Creating refresh token");
+				var refreshTokenExpiryDays = int.Parse(_configuration["Jwt:RefreshTokenExpiryInDays"] ?? "7");
+				var refreshToken = new RefreshToken
+				{
+					UserId = user.Id,
+					Token = tokenDto.RefreshToken,
+					ExpiresAt = DateTime.UtcNow.AddDays(refreshTokenExpiryDays)
+				};
+
+				await _refreshTokenRepository.CreateAsync(refreshToken);
+				Console.WriteLine("Login successful");
+
+				return tokenDto;
+			}
+			catch (Exception ex)
+			{
+				Console.WriteLine($"Login error: {ex.Message}");
+				if (ex.InnerException != null)
+				{
+					Console.WriteLine($"Inner exception: {ex.InnerException.Message}");
+				}
+				throw; // Rethrow to let the controller handle it
+			}
+		}
+
+		public async Task<TokenDto> RefreshTokenAsync(RefreshTokenDto refreshTokenDto)
+		{
+			try
+			{
+				Console.WriteLine("Processing refresh token request");
+				var principal = _tokenService.GetPrincipalFromExpiredToken(refreshTokenDto.AccessToken);
+				var userId = principal.Claims.FirstOrDefault(c => c.Type == JwtRegisteredClaimNames.Sub)?.Value;
+				var currentRole = principal.Claims.FirstOrDefault(c => c.Type == "CurrentRole")?.Value;
+
+				if (string.IsNullOrEmpty(userId) || string.IsNullOrEmpty(currentRole))
+				{
+					Console.WriteLine("Invalid access token: missing claims");
+					throw new SecurityTokenException("Invalid access token");
+				}
+
+				var refreshTokenEntity = await _refreshTokenRepository.GetByTokenAsync(refreshTokenDto.RefreshToken);
+
+				if (refreshTokenEntity == null)
+				{
+					Console.WriteLine("Invalid refresh token: token not found");
+					throw new SecurityTokenException("Invalid refresh token");
+				}
+
+				if (refreshTokenEntity.UserId != userId)
+				{
+					Console.WriteLine("Refresh token does not match the user");
+					throw new SecurityTokenException("Refresh token does not match the user");
+				}
+
+				if (refreshTokenEntity.ExpiresAt < DateTime.UtcNow)
+				{
+					Console.WriteLine("Refresh token has expired");
+					throw new SecurityTokenException("Refresh token has expired");
+				}
+
+				if (refreshTokenEntity.IsUsed || refreshTokenEntity.IsRevoked)
+				{
+					Console.WriteLine("Refresh token has been used or revoked");
+					throw new SecurityTokenException("Refresh token has been used or revoked");
+				}
+
+				// Mark the current refresh token as used
+				refreshTokenEntity.IsUsed = true;
+				await _refreshTokenRepository.UpdateAsync(refreshTokenEntity);
+				Console.WriteLine("Marked old refresh token as used");
+
+				// Generate new tokens
+				var user = refreshTokenEntity.User;
+				Console.WriteLine($"Generating new tokens for user: {user.Id}, role: {currentRole}");
+				var newTokenDto = _tokenService.GenerateTokens(user, currentRole);
+
+				// Create and save new refresh token
+				var refreshTokenExpiryDays = int.Parse(_configuration["Jwt:RefreshTokenExpiryInDays"] ?? "7");
+				var newRefreshToken = new RefreshToken
+				{
+					UserId = userId,
+					Token = newTokenDto.RefreshToken,
+					ExpiresAt = DateTime.UtcNow.AddDays(refreshTokenExpiryDays)
+				};
+
+				await _refreshTokenRepository.CreateAsync(newRefreshToken);
+				Console.WriteLine("Created new refresh token");
+
+				return newTokenDto;
+			}
+			catch (Exception ex)
+			{
+				Console.WriteLine($"Refresh token error: {ex.Message}");
+				if (ex.InnerException != null)
+				{
+					Console.WriteLine($"Inner exception: {ex.InnerException.Message}");
+				}
+				throw;
+			}
+		}
+
+		public async Task<bool> RevokeTokenAsync(string refreshToken)
+		{
+			try
+			{
+				Console.WriteLine("Revoking refresh token");
+				var refreshTokenEntity = await _refreshTokenRepository.GetByTokenAsync(refreshToken);
+
+				if (refreshTokenEntity == null)
+				{
+					Console.WriteLine("Token not found");
+					return false;
+				}
+
+				refreshTokenEntity.IsRevoked = true;
+				await _refreshTokenRepository.UpdateAsync(refreshTokenEntity);
+				Console.WriteLine("Token revoked successfully");
+
+				return true;
+			}
+			catch (Exception ex)
+			{
+				Console.WriteLine($"Revoke token error: {ex.Message}");
+				throw;
+			}
+		}
+
+		public async Task<bool> ResetPasswordAsync(string email)
+		{
+			try
+			{
+				Console.WriteLine($"Reset password request for email: {email}");
+				var user = await _userRepository.GetUserByEmailAsync(email);
+
+				if (user == null)
+				{
+					// Don't reveal that the user doesn't exist for security reasons
+					Console.WriteLine("User not found, but not revealing for security");
+					return false;
+				}
+
+				var result = await _firebaseAuthService.ResetPasswordAsync(email);
+				Console.WriteLine($"Password reset result: {result}");
+				return result;
+			}
+			catch (Exception ex)
+			{
+				Console.WriteLine($"Reset password error: {ex.Message}");
+				throw;
+			}
+		}
+
+		public async Task<TokenDto> SelectRoleAsync(SelectRoleDto selectRoleDto)
+		{
+			try
+			{
+				Console.WriteLine($"Role selection request for user: {selectRoleDto.UserId}, role: {selectRoleDto.Role}");
+				var user = await _userRepository.GetUserByIdAsync(selectRoleDto.UserId);
+
+				if (user == null)
+				{
+					Console.WriteLine("User not found");
+					throw new AuthenticationException("User not found");
+				}
+
+				if (user.Status != "active")
+				{
+					Console.WriteLine("User is inactive");
+					throw new AuthenticationException("User is inactive");
+				}
+
+				if (!user.Roles.Contains(selectRoleDto.Role))
+				{
+					Console.WriteLine("User does not have the selected role");
+					throw new AuthenticationException("User does not have the selected role");
+				}
+
+				// Generate new tokens for the selected role
+				Console.WriteLine("Generating tokens for new role");
+				var tokenDto = _tokenService.GenerateTokens(user, selectRoleDto.Role);
+
+				// Create and save new refresh token
+				Console.WriteLine("Creating refresh token");
+				var refreshTokenExpiryDays = int.Parse(_configuration["Jwt:RefreshTokenExpiryInDays"] ?? "7");
+				var refreshToken = new RefreshToken
+				{
+					UserId = user.Id,
+					Token = tokenDto.RefreshToken,
+					ExpiresAt = DateTime.UtcNow.AddDays(refreshTokenExpiryDays)
+				};
+
+				await _refreshTokenRepository.CreateAsync(refreshToken);
+				Console.WriteLine("Role selection successful");
+
+				return tokenDto;
+			}
+			catch (Exception ex)
+			{
+				Console.WriteLine($"Role selection error: {ex.Message}");
+				throw;
+			}
+		}
+
+		public async Task<bool> ValidateTokenAsync(string token)
+		{
+			try
+			{
+				Console.WriteLine("Validating token");
+				var principal = _tokenService.GetPrincipalFromExpiredToken(token);
+				var userId = principal.Claims.FirstOrDefault(c => c.Type == JwtRegisteredClaimNames.Sub)?.Value;
+
+				if (string.IsNullOrEmpty(userId))
+				{
+					Console.WriteLine("Invalid token: User ID claim not found");
+					return false;
+				}
+
+				// Check if user exists and is active
+				var user = await _userRepository.GetUserByIdAsync(userId);
+				if (user == null)
+				{
+					Console.WriteLine("User not found");
+					return false;
+				}
+
+				if (user.Status != "active")
+				{
+					Console.WriteLine("User is inactive");
+					return false;
+				}
+
+				Console.WriteLine("Token is valid");
+				return true;
+			}
+			catch (Exception ex)
+			{
+				Console.WriteLine($"Token validation error: {ex.Message}");
+				return false;
+			}
+		}
+	}
+}

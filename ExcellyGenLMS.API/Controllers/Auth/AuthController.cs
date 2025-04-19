@@ -1,0 +1,222 @@
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using ExcellyGenLMS.Application.DTOs.Auth;
+using ExcellyGenLMS.Application.Interfaces.Auth;
+using System.Security.Authentication;
+using Microsoft.IdentityModel.Tokens;
+using ExcellyGenLMS.Core.Interfaces.Repositories.Auth;
+
+namespace ExcellyGenLMS.API.Controllers.Auth
+{
+    [ApiController]
+    [Route("api/[controller]")]
+    public class AuthController : ControllerBase
+    {
+        private readonly IAuthService _authService;
+        private readonly IUserService _userService;
+        private readonly IUserRepository _userRepository;
+        private readonly ILogger<AuthController> _logger;
+        private readonly IFirebaseAuthService _firebaseAuthService;
+
+        public AuthController(
+            IAuthService authService,
+            IUserService userService,
+            IUserRepository userRepository,
+            ILogger<AuthController> logger,
+            IFirebaseAuthService firebaseAuthService)
+        {
+            _authService = authService;
+            _userService = userService;
+            _userRepository = userRepository;
+            _logger = logger;
+            _firebaseAuthService = firebaseAuthService;
+        }
+
+        [HttpPost("login")]
+        public async Task<ActionResult<AuthResultDto>> Login([FromBody] LoginDto loginDto)
+        {
+            try
+            {
+                _logger.LogInformation($"Login attempt for email: {loginDto.Email}");
+
+                if (!string.IsNullOrEmpty(loginDto.FirebaseToken))
+                {
+                    _logger.LogInformation("Firebase token provided");
+
+                    // Verify the token with Firebase directly first
+                    bool isValidToken = await _firebaseAuthService.VerifyTokenAsync(loginDto.FirebaseToken);
+                    if (!isValidToken)
+                    {
+                        _logger.LogWarning("Firebase token validation failed");
+                        return Unauthorized(new { message = "Invalid Firebase token" });
+                    }
+
+                    _logger.LogInformation("Firebase token validated successfully");
+                }
+
+                var tokenDto = await _authService.LoginAsync(loginDto);
+
+                // Try-catch block to handle possible token extraction errors
+                try
+                {
+                    var userId = _userService.GetUserIdFromToken(tokenDto.AccessToken);
+                    _logger.LogInformation($"User ID extracted from token: {userId}");
+
+                    var user = await _userRepository.GetUserByEmailAsync(loginDto.Email);
+
+                    if (user == null)
+                    {
+                        _logger.LogWarning("User not found after login");
+                        return Unauthorized(new { message = "User not found" });
+                    }
+
+                    var result = new AuthResultDto
+                    {
+                        UserId = user.Id,
+                        Name = user.Name,
+                        Email = user.Email,
+                        Roles = user.Roles ?? new List<string>(),
+                        Token = tokenDto
+                    };
+
+                    _logger.LogInformation($"Login successful for user: {user.Id}");
+                    return Ok(result);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError($"Error extracting user data from token: {ex.Message}");
+
+                    // Fall back to querying by email
+                    var user = await _userRepository.GetUserByEmailAsync(loginDto.Email);
+
+                    if (user == null)
+                    {
+                        _logger.LogWarning("User not found after login");
+                        return Unauthorized(new { message = "User not found" });
+                    }
+
+                    var result = new AuthResultDto
+                    {
+                        UserId = user.Id,
+                        Name = user.Name,
+                        Email = user.Email,
+                        Roles = user.Roles ?? new List<string>(),
+                        Token = tokenDto
+                    };
+
+                    _logger.LogInformation($"Login successful for user: {user.Id} (fallback method)");
+                    return Ok(result);
+                }
+            }
+            catch (AuthenticationException ex)
+            {
+                _logger.LogWarning($"Authentication failed: {ex.Message}");
+                return Unauthorized(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Login error: {ex.Message}");
+                if (ex.InnerException != null)
+                {
+                    _logger.LogError($"Inner exception: {ex.InnerException.Message}");
+                }
+                return StatusCode(500, new { message = "An error occurred during login", details = ex.Message });
+            }
+        }
+
+        [HttpPost("refresh-token")]
+        public async Task<ActionResult<TokenDto>> RefreshToken([FromBody] RefreshTokenDto refreshTokenDto)
+        {
+            try
+            {
+                var tokenDto = await _authService.RefreshTokenAsync(refreshTokenDto);
+                return Ok(tokenDto);
+            }
+            catch (SecurityTokenException ex)
+            {
+                _logger.LogWarning($"Token refresh failed: {ex.Message}");
+                return Unauthorized(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Token refresh error: {ex.Message}");
+                return StatusCode(500, new { message = "An error occurred during token refresh", details = ex.Message });
+            }
+        }
+
+        [HttpPost("revoke-token")]
+        [Authorize]
+        public async Task<ActionResult> RevokeToken([FromBody] string refreshToken)
+        {
+            try
+            {
+                var result = await _authService.RevokeTokenAsync(refreshToken);
+                if (!result)
+                {
+                    return NotFound(new { message = "Token not found" });
+                }
+
+                return Ok(new { message = "Token revoked successfully" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Token revocation error: {ex.Message}");
+                return StatusCode(500, new { message = "An error occurred", details = ex.Message });
+            }
+        }
+
+        [HttpPost("reset-password")]
+        public async Task<ActionResult> ResetPassword([FromBody] ResetPasswordDto resetPasswordDto)
+        {
+            try
+            {
+                var result = await _authService.ResetPasswordAsync(resetPasswordDto.Email);
+
+                // Always return success for security reasons
+                return Ok(new { message = "If your email exists in our system, a password reset link has been sent" });
+            }
+            catch (Exception ex)
+            {
+                // Log the error but don't expose it to the client
+                _logger.LogError($"Password reset error: {ex.Message}");
+                return Ok(new { message = "If your email exists in our system, a password reset link has been sent" });
+            }
+        }
+
+        [HttpPost("select-role")]
+        [Authorize]
+        public async Task<ActionResult<TokenDto>> SelectRole([FromBody] SelectRoleDto selectRoleDto)
+        {
+            try
+            {
+                var tokenDto = await _authService.SelectRoleAsync(selectRoleDto);
+                return Ok(tokenDto);
+            }
+            catch (AuthenticationException ex)
+            {
+                _logger.LogWarning($"Role selection failed: {ex.Message}");
+                return Unauthorized(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Role selection error: {ex.Message}");
+                return StatusCode(500, new { message = "An error occurred", details = ex.Message });
+            }
+        }
+
+        [HttpGet("validate-token")]
+        public async Task<ActionResult> ValidateToken([FromQuery] string token)
+        {
+            try
+            {
+                var isValid = await _authService.ValidateTokenAsync(token);
+                return Ok(new { isValid });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Token validation error: {ex.Message}");
+                return StatusCode(500, new { message = "An error occurred", details = ex.Message });
+            }
+        }
+    }
+}
