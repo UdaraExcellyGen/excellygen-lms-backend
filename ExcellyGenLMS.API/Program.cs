@@ -17,6 +17,9 @@ using ExcellyGenLMS.Application.Services.Admin;
 using Microsoft.AspNetCore.Identity;
 using ExcellyGenLMS.Core.Entities.Auth;
 
+using ExcellyGenLMS.Core.Interfaces.Repositories.Admin;
+using ExcellyGenLMS.Infrastructure.Data.Repositories.Admin;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add DbContext configuration
@@ -148,6 +151,10 @@ builder.Services.AddScoped<ITokenService, TokenService>();
 
 // Register User Management Service
 builder.Services.AddScoped<IUserManagementService, UserManagementService>();
+
+// Register Tech Management Service
+builder.Services.AddScoped<ITechnologyRepository, TechnologyRepository>();
+builder.Services.AddScoped<ITechnologyService, TechnologyService>();
 
 // Add controllers
 builder.Services.AddControllers();

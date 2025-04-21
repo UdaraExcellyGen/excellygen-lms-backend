@@ -427,7 +427,7 @@ namespace ExcellyGenLMS.Application.Services.Admin
                 if (timestamp == _lastTimestamp)
                 {
                     // Increment sequence (0-4095)
-                    _sequence = (_sequence + 1) & 4095;
+                    _sequence = (_sequence + 1) & 0xFFF;
 
                     // If sequence overflow, wait for next millisecond
                     if (_sequence == 0)
@@ -448,7 +448,8 @@ namespace ExcellyGenLMS.Application.Services.Admin
                 _lastTimestamp = timestamp;
 
                 // Calculate 64-bit ID (combining timestamp, sequence, and a node ID of 1)
-                long id = ((timestamp - EPOCH) << 22) | (1 << 12) | _sequence;
+                // Cast the integer literals to long to avoid sign extension issues
+                long id = ((timestamp - EPOCH) << 22) | ((long)1 << 12) | (long)_sequence;
 
                 // Convert to Base36 for shorter, more readable IDs
                 return $"USR-{ToBase36(id)}";
