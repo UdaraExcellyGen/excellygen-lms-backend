@@ -1,10 +1,14 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using ExcellyGenLMS.Application.DTOs.Auth;
 using ExcellyGenLMS.Application.Interfaces.Auth;
-using System.Security.Authentication;
-using Microsoft.IdentityModel.Tokens;
 using ExcellyGenLMS.Core.Interfaces.Repositories.Auth;
+using System;
+using System.Collections.Generic;
+using System.Security.Authentication;
+using System.Threading.Tasks;
+using Microsoft.IdentityModel.Tokens;
 
 namespace ExcellyGenLMS.API.Controllers.Auth
 {
@@ -216,6 +220,146 @@ namespace ExcellyGenLMS.API.Controllers.Auth
             {
                 _logger.LogError($"Token validation error: {ex.Message}");
                 return StatusCode(500, new { message = "An error occurred", details = ex.Message });
+            }
+        }
+
+        [HttpPost("sync-firebase-users")]
+        [Authorize(Roles = "Admin")]
+        public async Task<ActionResult> SyncFirebaseUsers()
+        {
+            try
+            {
+                _logger.LogInformation("Starting Firebase user synchronization");
+                var users = await _userRepository.GetAllUsersAsync();
+                int syncCount = 0;
+                List<string> errors = new List<string>();
+
+                foreach (var user in users)
+                {
+                    try
+                    {
+                        // Only sync users with missing or invalid Firebase UIDs
+                        if (string.IsNullOrEmpty(user.FirebaseUid) || user.FirebaseUid.Length < 20 || user.FirebaseUid.StartsWith("$2"))
+                        {
+                            _logger.LogInformation($"Syncing user {user.Email} with Firebase");
+
+                            // Generate a random password for existing users
+                            string tempPassword = Guid.NewGuid().ToString().Substring(0, 12) + "!A1";
+
+                            // Create or get user in Firebase
+                            string firebaseUid = await _firebaseAuthService.CreateUserAsync(new CreateUserDto
+                            {
+                                Email = user.Email,
+                                Password = tempPassword,
+                                Name = user.Name,
+                                Phone = user.Phone ?? "",
+                                Roles = user.Roles ?? new List<string>(),
+                                Department = user.Department ?? ""
+                            });
+
+                            // Update user in database with real Firebase UID
+                            user.FirebaseUid = firebaseUid;
+                            await _userRepository.UpdateUserAsync(user);
+
+                            syncCount++;
+                            _logger.LogInformation($"User {user.Email} synced with Firebase UID: {firebaseUid}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        string error = $"Error syncing user {user.Email}: {ex.Message}";
+                        _logger.LogError(ex, error);
+                        errors.Add(error);
+                    }
+                }
+
+                return Ok(new
+                {
+                    message = $"Synced {syncCount} users with Firebase",
+                    syncedCount = syncCount,
+                    totalUsers = users.Count,
+                    errors = errors.Count > 0 ? errors : null
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error syncing users with Firebase");
+                return StatusCode(500, new { message = "An error occurred while syncing users", details = ex.Message });
+            }
+        }
+
+        [HttpPost("fix-role-capitalization")]
+        [Authorize(Roles = "Admin")]
+        public async Task<ActionResult> FixRoleCapitalization()
+        {
+            try
+            {
+                _logger.LogInformation("Starting role capitalization fix");
+                var users = await _userRepository.GetAllUsersAsync();
+                int fixedCount = 0;
+
+                foreach (var user in users)
+                {
+                    bool needsUpdate = false;
+                    var updatedRoles = new List<string>();
+
+                    if (user.Roles != null)
+                    {
+                        foreach (var role in user.Roles)
+                        {
+                            string formattedRole = role;
+
+                            // Apply proper capitalization based on your enum format
+                            if (role.Equals("admin", StringComparison.OrdinalIgnoreCase) && role != "Admin")
+                            {
+                                formattedRole = "Admin";
+                                needsUpdate = true;
+                            }
+                            else if (role.Equals("learner", StringComparison.OrdinalIgnoreCase) && role != "Learner")
+                            {
+                                formattedRole = "Learner";
+                                needsUpdate = true;
+                            }
+                            else if ((role.Equals("coordinator", StringComparison.OrdinalIgnoreCase) ||
+                                    role.Equals("course coordinator", StringComparison.OrdinalIgnoreCase) ||
+                                    role.Equals("course_coordinator", StringComparison.OrdinalIgnoreCase)) &&
+                                    role != "CourseCoordinator")
+                            {
+                                formattedRole = "CourseCoordinator";
+                                needsUpdate = true;
+                            }
+                            else if ((role.Equals("project_manager", StringComparison.OrdinalIgnoreCase) ||
+                                    role.Equals("project manager", StringComparison.OrdinalIgnoreCase)) &&
+                                    role != "ProjectManager")
+                            {
+                                formattedRole = "ProjectManager";
+                                needsUpdate = true;
+                            }
+
+                            updatedRoles.Add(formattedRole);
+                        }
+                    }
+
+                    if (needsUpdate)
+                    {
+                        user.Roles = updatedRoles;
+                        await _userRepository.UpdateUserAsync(user);
+                        fixedCount++;
+                        _logger.LogInformation($"Fixed role capitalization for user: {user.Email}");
+                    }
+                }
+
+                return Ok(new
+                {
+                    message = $"Fixed role capitalization for {fixedCount} users",
+                    fixedCount = fixedCount,
+                    totalUsers = users.Count
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error fixing role capitalization");
+                return StatusCode(500, new { message = "An error occurred while fixing role capitalization", details = ex.Message });
             }
         }
     }

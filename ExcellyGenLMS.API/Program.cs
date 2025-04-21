@@ -12,6 +12,10 @@ using ExcellyGenLMS.Application.Services.Auth;
 using ExcellyGenLMS.Infrastructure.Services.Auth;
 using Microsoft.OpenApi.Models;
 using ExcellyGenLMS.API.Middleware;
+using ExcellyGenLMS.Application.Interfaces.Admin;
+using ExcellyGenLMS.Application.Services.Admin;
+using Microsoft.AspNetCore.Identity;
+using ExcellyGenLMS.Core.Entities.Auth;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -70,6 +74,24 @@ if (FirebaseApp.DefaultInstance == null)
         {
             Console.WriteLine($"Inner exception: {ex.InnerException.Message}");
         }
+
+        // Instead of failing, create a dummy Firebase app for development if needed
+        if (builder.Environment.IsDevelopment())
+        {
+            Console.WriteLine("Creating default Firebase app for development...");
+            try
+            {
+                FirebaseApp.Create(new AppOptions
+                {
+                    ProjectId = "excelly-lms-f3500"
+                });
+                Console.WriteLine("Default Firebase app created for development.");
+            }
+            catch (Exception devEx)
+            {
+                Console.WriteLine($"Failed to create development Firebase app: {devEx.Message}");
+            }
+        }
     }
 }
 
@@ -111,17 +133,21 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
+// Register IPasswordHasher service that UserService depends on
+builder.Services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
+
 // Register repositories
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
-// Register other repositories...
 
 // Register services
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IFirebaseAuthService, FirebaseAuthService>();
 builder.Services.AddScoped<ITokenService, TokenService>();
-// Register other services...
+
+// Register User Management Service
+builder.Services.AddScoped<IUserManagementService, UserManagementService>();
 
 // Add controllers
 builder.Services.AddControllers();

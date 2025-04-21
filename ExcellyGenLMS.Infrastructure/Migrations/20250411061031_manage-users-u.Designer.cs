@@ -13,7 +13,7 @@ namespace ExcellyGenLMS.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
     [Migration("20250411061031_manage-users-u")]
-    partial class manageusersu
+    partial class ManageUsers
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
