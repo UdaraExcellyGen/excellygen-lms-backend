@@ -1,72 +1,119 @@
-using ExcellyGenLMS.Application.DTOs.Auth;
-using ExcellyGenLMS.Application.Interfaces.Auth;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ExcellyGenLMS.Application.DTOs.Admin;
+using ExcellyGenLMS.Application.Interfaces.Admin;
+using Microsoft.Extensions.Logging;
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace ExcellyGenLMS.API.Controllers.Admin
 {
     [ApiController]
-    [Route("api/[controller]")]
+    [Route("api/admin/[controller]")]
+    [Authorize(Roles = "Admin")]  // Changed from "admin" to "Admin" to match database
     public class UsersController : ControllerBase
     {
-        private readonly IUserService _userService;
+        private readonly IUserManagementService _userManagementService;
+        private readonly ILogger<UsersController> _logger;
 
-        public UsersController(IUserService userService)
+        public UsersController(
+            IUserManagementService userManagementService,
+            ILogger<UsersController> logger)
         {
-            _userService = userService;
+            _userManagementService = userManagementService;
+            _logger = logger;
         }
 
         [HttpGet]
-        public async Task<ActionResult<List<UserDto>>> GetAllUsers()
-        {
-            var users = await _userService.GetAllUsersAsync();
-            return Ok(users);
-        }
-
-        [HttpGet("{id}")]
-        public async Task<ActionResult<UserDto>> GetUserById(string id)
+        public async Task<ActionResult<List<AdminUserDto>>> GetAllUsers()
         {
             try
             {
-                var user = await _userService.GetUserByIdAsync(id);
+                _logger.LogInformation("Getting all users");
+                var users = await _userManagementService.GetAllUsersAsync();
+                return Ok(users);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting all users");
+                return StatusCode(500, new { message = "An error occurred while retrieving users", details = ex.Message });
+            }
+        }
+
+        [HttpGet("search")]
+        public async Task<ActionResult<List<AdminUserDto>>> SearchUsers([FromQuery] AdminUserSearchParams searchParams)
+        {
+            try
+            {
+                _logger.LogInformation($"Searching users with params");
+                var users = await _userManagementService.SearchUsersAsync(searchParams);
+                return Ok(users);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error searching users");
+                return StatusCode(500, new { message = "An error occurred while searching users", details = ex.Message });
+            }
+        }
+
+        [HttpGet("{id}")]
+        public async Task<ActionResult<AdminUserDto>> GetUserById(string id)
+        {
+            try
+            {
+                _logger.LogInformation($"Getting user with ID: {id}");
+                var user = await _userManagementService.GetUserByIdAsync(id);
+
+                if (user == null)
+                {
+                    return NotFound(new { message = $"User with ID {id} not found" });
+                }
+
                 return Ok(user);
             }
-            catch (KeyNotFoundException ex)
+            catch (Exception ex)
             {
-                return NotFound(ex.Message);
+                _logger.LogError(ex, $"Error getting user with ID: {id}");
+                return StatusCode(500, new { message = "An error occurred while retrieving the user", details = ex.Message });
             }
         }
 
         [HttpPost]
-        public async Task<ActionResult<UserDto>> CreateUser([FromBody] CreateUserDto createUserDto)
+        public async Task<ActionResult<AdminUserDto>> CreateUser([FromBody] AdminCreateUserDto createUserDto)
         {
             try
             {
-                var user = await _userService.CreateUserAsync(createUserDto);
-                return CreatedAtAction(nameof(GetUserById), new { id = user.Id }, user);
+                _logger.LogInformation($"Creating new user with email: {createUserDto.Email}");
+                var createdUser = await _userManagementService.CreateUserAsync(createUserDto);
+                return CreatedAtAction(nameof(GetUserById), new { id = createdUser.Id }, createdUser);
             }
-            catch (InvalidOperationException ex)
+            catch (Exception ex)
             {
-                return BadRequest(ex.Message);
+                _logger.LogError(ex, "Error creating user");
+                return StatusCode(500, new { message = "An error occurred while creating the user", details = ex.Message });
             }
         }
 
         [HttpPut("{id}")]
-        public async Task<ActionResult<UserDto>> UpdateUser(string id, [FromBody] UpdateUserDto updateUserDto)
+        public async Task<ActionResult<AdminUserDto>> UpdateUser(string id, [FromBody] AdminUpdateUserDto updateUserDto)
         {
             try
             {
-                var user = await _userService.UpdateUserAsync(id, updateUserDto);
-                return Ok(user);
+                _logger.LogInformation($"Updating user with ID: {id}");
+                var updatedUser = await _userManagementService.UpdateUserAsync(id, updateUserDto);
+
+                if (updatedUser == null)
+                {
+                    return NotFound(new { message = $"User with ID {id} not found" });
+                }
+
+                return Ok(updatedUser);
             }
-            catch (KeyNotFoundException ex)
+            catch (Exception ex)
             {
-                return NotFound(ex.Message);
-            }
-            catch (InvalidOperationException ex)
-            {
-                return BadRequest(ex.Message);
+                _logger.LogError(ex, $"Error updating user with ID: {id}");
+                return StatusCode(500, new { message = "An error occurred while updating the user", details = ex.Message });
             }
         }
 
@@ -75,34 +122,43 @@ namespace ExcellyGenLMS.API.Controllers.Admin
         {
             try
             {
-                await _userService.DeleteUserAsync(id);
+                _logger.LogInformation($"Deleting user with ID: {id}");
+                var result = await _userManagementService.DeleteUserAsync(id);
+
+                if (!result)
+                {
+                    return NotFound(new { message = $"User with ID {id} not found" });
+                }
+
                 return NoContent();
             }
-            catch (KeyNotFoundException ex)
+            catch (Exception ex)
             {
-                return NotFound(ex.Message);
+                _logger.LogError(ex, $"Error deleting user with ID: {id}");
+                return StatusCode(500, new { message = "An error occurred while deleting the user", details = ex.Message });
             }
         }
 
-        [HttpPatch("{id}/toggle-status")]
-        public async Task<ActionResult<UserDto>> ToggleUserStatus(string id)
+        [HttpPost("{id}/toggle-status")]
+        public async Task<ActionResult<AdminUserDto>> ToggleUserStatus(string id)
         {
             try
             {
-                var user = await _userService.ToggleUserStatusAsync(id);
+                _logger.LogInformation($"Toggling status for user with ID: {id}");
+                var user = await _userManagementService.ToggleUserStatusAsync(id);
+
+                if (user == null)
+                {
+                    return NotFound(new { message = $"User with ID {id} not found" });
+                }
+
                 return Ok(user);
             }
-            catch (KeyNotFoundException ex)
+            catch (Exception ex)
             {
-                return NotFound(ex.Message);
+                _logger.LogError(ex, $"Error toggling status for user with ID: {id}");
+                return StatusCode(500, new { message = "An error occurred while toggling user status", details = ex.Message });
             }
-        }
-
-        [HttpGet("search")]
-        public async Task<ActionResult<List<UserDto>>> SearchUsers([FromQuery] UserSearchParams searchParams)
-        {
-            var users = await _userService.SearchUsersAsync(searchParams);
-            return Ok(users);
         }
     }
 }

@@ -4,11 +4,12 @@ using FirebaseAdmin;
 using FirebaseAdmin.Auth;
 using Google.Apis.Auth.OAuth2;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using ExcellyGenLMS.Application.DTOs.Auth;
 using ExcellyGenLMS.Application.Interfaces.Auth;
 using System;
 using System.Threading.Tasks;
-using System.IO;
+using System.Text.RegularExpressions;
 
 namespace ExcellyGenLMS.Infrastructure.Services.Auth
 {
@@ -17,10 +18,14 @@ namespace ExcellyGenLMS.Infrastructure.Services.Auth
         private readonly FirebaseAuthClient _authClient;
         private readonly FirebaseAuth _firebaseAuth;
         private readonly IConfiguration _configuration;
+        private readonly ILogger<FirebaseAuthService> _logger;
 
-        public FirebaseAuthService(IConfiguration configuration)
+        public FirebaseAuthService(
+            IConfiguration configuration,
+            ILogger<FirebaseAuthService> logger)
         {
             _configuration = configuration;
+            _logger = logger;
 
             try
             {
@@ -35,7 +40,7 @@ namespace ExcellyGenLMS.Infrastructure.Services.Auth
                     }
                 };
                 _authClient = new FirebaseAuthClient(config);
-                Console.WriteLine("Firebase Auth Client initialized");
+                _logger.LogInformation("Firebase Auth Client initialized");
 
                 // Firebase Admin SDK should already be initialized in Program.cs
                 _firebaseAuth = FirebaseAuth.DefaultInstance;
@@ -43,14 +48,14 @@ namespace ExcellyGenLMS.Infrastructure.Services.Auth
                 {
                     throw new InvalidOperationException("FirebaseAuth.DefaultInstance is null. Make sure Firebase Admin SDK is initialized properly.");
                 }
-                Console.WriteLine("Firebase Auth instance obtained successfully");
+                _logger.LogInformation("Firebase Auth Admin instance obtained successfully");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error initializing FirebaseAuthService: {ex.Message}");
+                _logger.LogError(ex, "Error initializing FirebaseAuthService");
                 if (ex.InnerException != null)
                 {
-                    Console.WriteLine($"Inner exception: {ex.InnerException.Message}");
+                    _logger.LogError(ex.InnerException, "Inner exception");
                 }
                 throw;
             }
@@ -60,28 +65,80 @@ namespace ExcellyGenLMS.Infrastructure.Services.Auth
         {
             try
             {
-                Console.WriteLine($"Creating user with email: {userDto.Email}");
+                _logger.LogInformation($"Creating Firebase user with email: {userDto.Email}");
+
+                // Format the phone number properly or set to null if invalid
+                string formattedPhone = FormatPhoneNumber(userDto.Phone);
+
                 // Create user with Firebase Admin SDK
                 var userArgs = new UserRecordArgs
                 {
                     Email = userDto.Email,
                     Password = userDto.Password,
                     DisplayName = userDto.Name,
-                    PhoneNumber = userDto.Phone,
                     EmailVerified = true,
                     Disabled = false
                 };
 
+                // Only add phone number if it's properly formatted
+                if (!string.IsNullOrEmpty(formattedPhone))
+                {
+                    userArgs.PhoneNumber = formattedPhone;
+                }
+
                 var userRecord = await _firebaseAuth.CreateUserAsync(userArgs);
-                Console.WriteLine($"User created with UID: {userRecord.Uid}");
+                _logger.LogInformation($"Firebase user created with UID: {userRecord.Uid}");
                 return userRecord.Uid;
             }
             catch (FirebaseAdmin.Auth.FirebaseAuthException ex)
             {
-                Console.WriteLine($"Firebase authentication error: {ex.Message}");
-                Console.WriteLine($"Error code: {ex.ErrorCode}");
-                Console.WriteLine($"Stack trace: {ex.StackTrace}");
+                _logger.LogWarning(ex, $"Firebase auth error: {ex.Message}");
+
+                // If user already exists, try to get their UID
+                if (ex.Message.Contains("email already exists"))
+                {
+                    try
+                    {
+                        var existingUser = await _firebaseAuth.GetUserByEmailAsync(userDto.Email);
+                        _logger.LogInformation($"User already exists with UID: {existingUser.Uid}");
+
+                        // Update password if provided
+                        if (!string.IsNullOrEmpty(userDto.Password))
+                        {
+                            // Format phone number for update too
+                            string formattedPhone = FormatPhoneNumber(userDto.Phone);
+
+                            var updateArgs = new UserRecordArgs
+                            {
+                                Uid = existingUser.Uid,
+                                Password = userDto.Password
+                            };
+
+                            // Only add phone if properly formatted
+                            if (!string.IsNullOrEmpty(formattedPhone))
+                            {
+                                updateArgs.PhoneNumber = formattedPhone;
+                            }
+
+                            await _firebaseAuth.UpdateUserAsync(updateArgs);
+                            _logger.LogInformation("User password updated");
+                        }
+
+                        return existingUser.Uid;
+                    }
+                    catch (Exception innerEx)
+                    {
+                        _logger.LogError(innerEx, "Error getting existing user from Firebase");
+                        throw new ApplicationException($"Failed to get existing Firebase user: {innerEx.Message}", innerEx);
+                    }
+                }
+
                 throw new ApplicationException($"Firebase authentication error: {ex.Message}", ex);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected error creating Firebase user");
+                throw new ApplicationException($"Failed to create Firebase user: {ex.Message}", ex);
             }
         }
 
@@ -89,35 +146,28 @@ namespace ExcellyGenLMS.Infrastructure.Services.Auth
         {
             try
             {
-                Console.WriteLine("Starting token verification");
+                _logger.LogInformation("Starting Firebase token verification");
                 if (string.IsNullOrEmpty(token))
                 {
-                    Console.WriteLine("Token is null or empty");
+                    _logger.LogWarning("Token is null or empty");
                     return false;
                 }
 
-                Console.WriteLine($"Token length: {token.Length}");
-                Console.WriteLine($"Token first 20 chars: {token.Substring(0, Math.Min(20, token.Length))}...");
+                _logger.LogDebug($"Token length: {token.Length}");
+                _logger.LogDebug($"Token first 20 chars: {token.Substring(0, Math.Min(20, token.Length))}...");
 
                 var decodedToken = await _firebaseAuth.VerifyIdTokenAsync(token);
-                Console.WriteLine($"Token verified successfully. UID: {decodedToken.Uid}");
+                _logger.LogInformation($"Token verified successfully. UID: {decodedToken.Uid}");
                 return true;
             }
             catch (FirebaseAdmin.Auth.FirebaseAuthException ex)
             {
-                Console.WriteLine($"Token verification failed: {ex.Message}");
-                Console.WriteLine($"Error code: {ex.ErrorCode}");
-                Console.WriteLine($"Stack trace: {ex.StackTrace}");
+                _logger.LogWarning(ex, $"Token verification failed: {ex.Message}");
                 return false;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Unexpected error verifying token: {ex.Message}");
-                Console.WriteLine($"Stack trace: {ex.StackTrace}");
-                if (ex.InnerException != null)
-                {
-                    Console.WriteLine($"Inner exception: {ex.InnerException.Message}");
-                }
+                _logger.LogError(ex, "Unexpected error verifying token");
                 return false;
             }
         }
@@ -126,12 +176,12 @@ namespace ExcellyGenLMS.Infrastructure.Services.Auth
         {
             try
             {
-                Console.WriteLine($"Generating custom token for user ID: {userId}");
+                _logger.LogInformation($"Generating custom token for user ID: {userId}");
                 return await _firebaseAuth.CreateCustomTokenAsync(userId);
             }
             catch (FirebaseAdmin.Auth.FirebaseAuthException ex)
             {
-                Console.WriteLine($"Failed to generate custom token: {ex.Message}");
+                _logger.LogError(ex, "Failed to generate custom token");
                 throw new ApplicationException($"Failed to generate custom token: {ex.Message}", ex);
             }
         }
@@ -140,7 +190,7 @@ namespace ExcellyGenLMS.Infrastructure.Services.Auth
         {
             try
             {
-                Console.WriteLine($"Updating user with Firebase UID: {firebaseUid}");
+                _logger.LogInformation($"Updating Firebase user with UID: {firebaseUid}");
                 var args = new UserRecordArgs
                 {
                     Uid = firebaseUid,
@@ -153,12 +203,12 @@ namespace ExcellyGenLMS.Infrastructure.Services.Auth
                 }
 
                 await _firebaseAuth.UpdateUserAsync(args);
-                Console.WriteLine("User updated successfully");
+                _logger.LogInformation("Firebase user updated successfully");
             }
             catch (FirebaseAdmin.Auth.FirebaseAuthException ex)
             {
-                Console.WriteLine($"Failed to update user: {ex.Message}");
-                throw new ApplicationException($"Failed to update user: {ex.Message}", ex);
+                _logger.LogError(ex, "Failed to update Firebase user");
+                throw new ApplicationException($"Failed to update Firebase user: {ex.Message}", ex);
             }
         }
 
@@ -166,14 +216,14 @@ namespace ExcellyGenLMS.Infrastructure.Services.Auth
         {
             try
             {
-                Console.WriteLine($"Deleting user with Firebase UID: {firebaseUid}");
+                _logger.LogInformation($"Deleting Firebase user with UID: {firebaseUid}");
                 await _firebaseAuth.DeleteUserAsync(firebaseUid);
-                Console.WriteLine("User deleted successfully");
+                _logger.LogInformation("Firebase user deleted successfully");
             }
             catch (FirebaseAdmin.Auth.FirebaseAuthException ex)
             {
-                Console.WriteLine($"Failed to delete user: {ex.Message}");
-                throw new ApplicationException($"Failed to delete user: {ex.Message}", ex);
+                _logger.LogError(ex, "Failed to delete Firebase user");
+                throw new ApplicationException($"Failed to delete Firebase user: {ex.Message}", ex);
             }
         }
 
@@ -181,15 +231,15 @@ namespace ExcellyGenLMS.Infrastructure.Services.Auth
         {
             try
             {
-                Console.WriteLine($"Sending password reset email to: {email}");
+                _logger.LogInformation($"Sending password reset email to: {email}");
                 await _authClient.ResetEmailPasswordAsync(email);
-                Console.WriteLine("Password reset email sent successfully");
+                _logger.LogInformation("Password reset email sent successfully");
                 return true;
             }
             catch (Firebase.Auth.FirebaseAuthException ex)
             {
                 // Log the error but don't expose details to the client
-                Console.WriteLine($"Error resetting password: {ex.Message}");
+                _logger.LogWarning(ex, "Error resetting Firebase password");
                 return false;
             }
         }
@@ -198,15 +248,126 @@ namespace ExcellyGenLMS.Infrastructure.Services.Auth
         {
             try
             {
-                Console.WriteLine("Getting user ID from token");
+                _logger.LogInformation("Getting user ID from Firebase token");
                 var decodedToken = await _firebaseAuth.VerifyIdTokenAsync(token);
-                Console.WriteLine($"User ID from token: {decodedToken.Uid}");
+                _logger.LogInformation($"User ID from token: {decodedToken.Uid}");
                 return decodedToken.Uid;
             }
             catch (FirebaseAdmin.Auth.FirebaseAuthException ex)
             {
-                Console.WriteLine($"Invalid token: {ex.Message}");
-                throw new ApplicationException($"Invalid token: {ex.Message}", ex);
+                _logger.LogError(ex, "Invalid Firebase token");
+                throw new ApplicationException($"Invalid Firebase token: {ex.Message}", ex);
+            }
+        }
+
+        // Helper method to format phone numbers to E.164 format
+        private string FormatPhoneNumber(string phoneNumber)
+        {
+            if (string.IsNullOrWhiteSpace(phoneNumber))
+            {
+                return string.Empty;
+            }
+
+            // Remove any non-digit characters
+            string digitsOnly = Regex.Replace(phoneNumber, @"\D", "");
+
+            // If it already has a '+' prefix, return as is
+            if (phoneNumber.StartsWith("+"))
+            {
+                return phoneNumber;
+            }
+
+            // Determine country code (default to +1 for US if not specified)
+            // For international numbers, you might need more complex logic
+            if (digitsOnly.Length == 10) // US number without country code
+            {
+                return "+1" + digitsOnly;
+            }
+            else if (digitsOnly.Length > 10) // Already has country code
+            {
+                return "+" + digitsOnly;
+            }
+
+            // If we can't format it properly, return empty string to avoid Firebase errors
+            _logger.LogWarning($"Could not format phone number '{phoneNumber}' into E.164 format");
+            return string.Empty;
+        }
+
+        public async Task<bool> SetUserDisabledStatusAsync(string firebaseUid, bool disabled)
+        {
+            try
+            {
+                _logger.LogInformation($"Setting Firebase user {firebaseUid} disabled status to: {disabled}");
+
+                await _firebaseAuth.UpdateUserAsync(new UserRecordArgs
+                {
+                    Uid = firebaseUid,
+                    Disabled = disabled
+                });
+
+                _logger.LogInformation($"Firebase user disabled status updated successfully");
+                return true;
+            }
+            catch (FirebaseAdmin.Auth.FirebaseAuthException ex)
+            {
+                _logger.LogError(ex, "Failed to update Firebase user disabled status");
+                return false;
+            }
+        }
+
+        public async Task<string> SyncUserWithFirebaseAsync(string email, string password)
+        {
+            try
+            {
+                _logger.LogInformation($"Syncing user with Firebase: {email}");
+
+                // Try to get existing user
+                try
+                {
+                    var existingUser = await _firebaseAuth.GetUserByEmailAsync(email);
+                    _logger.LogInformation($"Found existing Firebase user with UID: {existingUser.Uid}");
+
+                    // Update password if provided
+                    if (!string.IsNullOrEmpty(password))
+                    {
+                        await _firebaseAuth.UpdateUserAsync(new UserRecordArgs
+                        {
+                            Uid = existingUser.Uid,
+                            Password = password
+                        });
+                        _logger.LogInformation("Firebase user password updated");
+                    }
+
+                    return existingUser.Uid;
+                }
+                catch (FirebaseAdmin.Auth.FirebaseAuthException ex)
+                {
+                    // Check error message to see if user doesn't exist
+                    if (ex.Message.Contains("user does not exist") || ex.Message.Contains("no user record"))
+                    {
+                        // User doesn't exist, create a new one
+                        _logger.LogInformation("User not found in Firebase, creating new user");
+                        var userArgs = new UserRecordArgs
+                        {
+                            Email = email,
+                            Password = password,
+                            EmailVerified = true,
+                            Disabled = false
+                        };
+
+                        var userRecord = await _firebaseAuth.CreateUserAsync(userArgs);
+                        _logger.LogInformation($"Firebase user created with UID: {userRecord.Uid}");
+                        return userRecord.Uid;
+                    }
+
+                    // If it's not a "user not found" error, rethrow
+                    throw;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error syncing user with Firebase");
+                throw new ApplicationException($"Failed to sync user with Firebase: {ex.Message}", ex);
             }
         }
     }

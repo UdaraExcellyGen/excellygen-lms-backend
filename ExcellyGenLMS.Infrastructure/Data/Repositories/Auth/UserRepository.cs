@@ -1,6 +1,8 @@
 using ExcellyGenLMS.Core.Entities.Auth;
 using ExcellyGenLMS.Core.Interfaces.Repositories.Auth;
+using ExcellyGenLMS.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -11,115 +13,136 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Auth
     public class UserRepository : IUserRepository
     {
         private readonly ApplicationDbContext _context;
+        private readonly ILogger<UserRepository> _logger;
 
-        public UserRepository(ApplicationDbContext context)
+        public UserRepository(
+            ApplicationDbContext context,
+            ILogger<UserRepository> logger)
         {
             _context = context;
+            _logger = logger;
         }
 
         public async Task<List<User>> GetAllUsersAsync()
         {
-            return await _context.Users.ToListAsync();
+            try
+            {
+                return await _context.Users.ToListAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting all users");
+                throw;
+            }
         }
 
         public async Task<User?> GetUserByIdAsync(string id)
         {
-            return await _context.Users.FindAsync(id);
+            try
+            {
+                return await _context.Users.FirstOrDefaultAsync(u => u.Id == id);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error getting user with ID: {id}");
+                throw;
+            }
         }
 
         public async Task<User?> GetUserByEmailAsync(string email)
         {
-            return await _context.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == email.ToLower());
-        }
-
-        public async Task<User> CreateUserAsync(User user)
-        {
-            user.Id = Guid.NewGuid().ToString();
-            user.JoinedDate = DateTime.UtcNow;
-            user.Status = "active";
-
-            _context.Users.Add(user);
-            await _context.SaveChangesAsync();
-
-            return user;
-        }
-
-        public async Task<User> UpdateUserAsync(User user)
-        {
-            var existingUser = await _context.Users.FindAsync(user.Id)
-                ?? throw new KeyNotFoundException($"User with ID {user.Id} not found");
-
-            // Update properties
-            existingUser.Name = user.Name;
-            existingUser.Email = user.Email;
-            existingUser.Phone = user.Phone;
-            existingUser.Roles = user.Roles;
-            existingUser.Department = user.Department;
-            existingUser.Status = user.Status;
-
-            // Optional fields
-            if (!string.IsNullOrEmpty(user.JobRole))
-                existingUser.JobRole = user.JobRole;
-
-            if (!string.IsNullOrEmpty(user.About))
-                existingUser.About = user.About;
-
-            if (user.Avatar != null)
-                existingUser.Avatar = user.Avatar;
-
-            await _context.SaveChangesAsync();
-
-            return existingUser;
-        }
-
-        public async Task DeleteUserAsync(string id)
-        {
-            var user = await _context.Users.FindAsync(id)
-                ?? throw new KeyNotFoundException($"User with ID {id} not found");
-
-            _context.Users.Remove(user);
-            await _context.SaveChangesAsync();
-        }
-
-        public async Task<List<User>> SearchUsersAsync(string? searchTerm, List<string>? roles, string? status)
-        {
-            var query = _context.Users.AsQueryable();
-
-            // Apply search filter
-            if (!string.IsNullOrWhiteSpace(searchTerm))
+            try
             {
-                searchTerm = searchTerm.ToLower();
-                query = query.Where(u =>
-                    u.Name.ToLower().Contains(searchTerm) ||
-                    u.Email.ToLower().Contains(searchTerm) ||
-                    u.Id.ToLower().Contains(searchTerm));
+                return await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
             }
-
-            // Apply role filter
-            if (roles != null && roles.Any())
+            catch (Exception ex)
             {
-                // This requires a custom approach due to the JSON serialized roles
-                // We'll need to fetch all and filter in memory for exact matching
-                var users = await query.ToListAsync();
-                users = users.Where(u =>
-                    u.Roles.Any(role => roles.Contains(role))).ToList();
+                _logger.LogError(ex, $"Error getting user with email: {email}");
+                throw;
+            }
+        }
 
-                // Apply status filter to the in-memory list
-                if (!string.IsNullOrWhiteSpace(status) && status != "all")
+        public async Task<bool> AddUserAsync(User user)
+        {
+            try
+            {
+                _context.Users.Add(user);
+                return await _context.SaveChangesAsync() > 0;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error adding user");
+                throw;
+            }
+        }
+
+        public async Task<bool> UpdateUserAsync(User user)
+        {
+            try
+            {
+                _context.Entry(user).State = EntityState.Modified;
+                return await _context.SaveChangesAsync() > 0;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error updating user with ID: {user.Id}");
+                throw;
+            }
+        }
+
+        public async Task<bool> DeleteUserAsync(string id)
+        {
+            try
+            {
+                var user = await _context.Users.FindAsync(id);
+                if (user == null)
                 {
-                    users = users.Where(u => u.Status == status).ToList();
+                    return false;
+                }
+                _context.Users.Remove(user);
+                return await _context.SaveChangesAsync() > 0;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error deleting user with ID: {id}");
+                throw;
+            }
+        }
+
+        public async Task<List<User>> SearchUsersAsync(string? searchTerm, List<string>? roles, string status)
+        {
+            try
+            {
+                var query = _context.Users.AsQueryable();
+
+                if (!string.IsNullOrEmpty(searchTerm))
+                {
+                    searchTerm = searchTerm.ToLower();
+                    query = query.Where(u =>
+                        u.Name.ToLower().Contains(searchTerm) ||
+                        u.Email.ToLower().Contains(searchTerm) ||
+                        u.Id.ToLower().Contains(searchTerm));
                 }
 
-                return users;
-            }
+                if (roles != null && roles.Count > 0)
+                {
+                    // This is a simplification - proper JSON contains check requires more complex EF Core queries
+                    // For SQL Server, you might need to use raw SQL or a custom function
+                    query = query.Where(u => roles.Any(r => u.Roles.Contains(r)));
+                }
 
-            // Apply status filter at the database level if roles filter is not used
-            if (!string.IsNullOrWhiteSpace(status) && status != "all")
+                if (status != "all")
+                {
+                    query = query.Where(u => u.Status == status);
+                }
+
+                return await query.ToListAsync();
+            }
+            catch (Exception ex)
             {
-                query = query.Where(u => u.Status == status);
+                _logger.LogError(ex, "Error searching users");
+                throw;
             }
-
-            return await query.ToListAsync();
         }
     }
 }
