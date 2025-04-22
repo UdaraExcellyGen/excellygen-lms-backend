@@ -156,6 +156,14 @@ builder.Services.AddScoped<IUserManagementService, UserManagementService>();
 builder.Services.AddScoped<ITechnologyRepository, TechnologyRepository>();
 builder.Services.AddScoped<ITechnologyService, TechnologyService>();
 
+// Register CourseCategory repositories and services
+builder.Services.AddScoped<ICourseCategoryRepository, CourseCategoryRepository>();
+builder.Services.AddScoped<ICourseCategoryService, CourseCategoryService>();
+
+// Register Course Admin repositories and services
+builder.Services.AddScoped<ICourseAdminRepository, CourseAdminRepository>();
+builder.Services.AddScoped<ICourseAdminService, CourseAdminService>();
+
 // Add controllers
 builder.Services.AddControllers();
 
