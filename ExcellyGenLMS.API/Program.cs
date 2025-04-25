@@ -164,6 +164,9 @@ builder.Services.AddScoped<ICourseCategoryService, CourseCategoryService>();
 builder.Services.AddScoped<ICourseAdminRepository, CourseAdminRepository>();
 builder.Services.AddScoped<ICourseAdminService, CourseAdminService>();
 
+// Register Dashboard Service
+builder.Services.AddScoped<IDashboardService, DashboardService>();
+
 // Add controllers
 builder.Services.AddControllers();
 
