@@ -32,6 +32,13 @@ namespace ExcellyGenLMS.Infrastructure.Data
         public DbSet<ThreadComReply> ThreadComReplies { get; set; }
         public DbSet<CV> CVs { get; set; }
         public DbSet<Badge> Badges { get; set; }
+        public DbSet<UserBadge> UserBadges { get; set; }
+        public DbSet<UserTechnology> UserTechnologies { get; set; }
+        public DbSet<Project> Projects { get; set; }
+        public DbSet<ProjectTechnology> ProjectTechnologies { get; set; }
+        public DbSet<UserProject> UserProjects { get; set; }
+        public DbSet<Certification> Certifications { get; set; }
+        public DbSet<UserCertification> UserCertifications { get; set; }
 
         // Notification Module
         public DbSet<Notification> Notifications { get; set; }
@@ -126,6 +133,94 @@ namespace ExcellyGenLMS.Infrastructure.Data
             // Configure Badge entity
             modelBuilder.Entity<Badge>()
                 .HasKey(e => e.Id);
+
+            // Configure UserBadge entity
+            modelBuilder.Entity<UserBadge>()
+                .HasKey(e => e.Id);
+
+            modelBuilder.Entity<UserBadge>()
+                .HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<UserBadge>()
+                .HasOne(e => e.Badge)
+                .WithMany(b => b.UserBadges)
+                .HasForeignKey(e => e.BadgeId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Configure UserTechnology entity
+            modelBuilder.Entity<UserTechnology>()
+                .HasKey(e => e.Id);
+
+            modelBuilder.Entity<UserTechnology>()
+                .HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<UserTechnology>()
+                .HasOne(e => e.Technology)
+                .WithMany()
+                .HasForeignKey(e => e.TechnologyId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Configure Project entity
+            modelBuilder.Entity<Project>()
+                .HasKey(e => e.Id);
+
+            // Configure ProjectTechnology entity
+            modelBuilder.Entity<ProjectTechnology>()
+                .HasKey(e => e.Id);
+
+            modelBuilder.Entity<ProjectTechnology>()
+                .HasOne(e => e.Project)
+                .WithMany(p => p.Technologies)
+                .HasForeignKey(e => e.ProjectId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<ProjectTechnology>()
+                .HasOne(e => e.Technology)
+                .WithMany()
+                .HasForeignKey(e => e.TechnologyId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Configure UserProject entity
+            modelBuilder.Entity<UserProject>()
+                .HasKey(e => e.Id);
+
+            modelBuilder.Entity<UserProject>()
+                .HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<UserProject>()
+                .HasOne(e => e.Project)
+                .WithMany(p => p.UserProjects)
+                .HasForeignKey(e => e.ProjectId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Configure Certification entity
+            modelBuilder.Entity<Certification>()
+                .HasKey(e => e.Id);
+
+            // Configure UserCertification entity
+            modelBuilder.Entity<UserCertification>()
+                .HasKey(e => e.Id);
+
+            modelBuilder.Entity<UserCertification>()
+                .HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<UserCertification>()
+                .HasOne(e => e.Certification)
+                .WithMany(c => c.UserCertifications)
+                .HasForeignKey(e => e.CertificationId)
+                .OnDelete(DeleteBehavior.Cascade);
 
             // Configure Notification entity
             modelBuilder.Entity<Notification>()
