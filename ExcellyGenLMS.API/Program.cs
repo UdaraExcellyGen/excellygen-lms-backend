@@ -16,9 +16,18 @@ using ExcellyGenLMS.Application.Interfaces.Admin;
 using ExcellyGenLMS.Application.Services.Admin;
 using Microsoft.AspNetCore.Identity;
 using ExcellyGenLMS.Core.Entities.Auth;
-
 using ExcellyGenLMS.Core.Interfaces.Repositories.Admin;
 using ExcellyGenLMS.Infrastructure.Data.Repositories.Admin;
+using ExcellyGenLMS.Application.Interfaces.Common;
+using ExcellyGenLMS.Infrastructure.Services.Common;
+using Microsoft.Extensions.FileProviders;
+using System.IO;
+
+// Learner Module imports
+using ExcellyGenLMS.Core.Interfaces.Repositories.Learner;
+using ExcellyGenLMS.Infrastructure.Data.Repositories.Learner;
+using ExcellyGenLMS.Application.Interfaces.Learner;
+using ExcellyGenLMS.Application.Services.Learner;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -167,6 +176,25 @@ builder.Services.AddScoped<ICourseAdminService, CourseAdminService>();
 // Register Dashboard Service
 builder.Services.AddScoped<IDashboardService, DashboardService>();
 
+// Register Learner repositories
+builder.Services.AddScoped<IUserBadgeRepository, UserBadgeRepository>();
+builder.Services.AddScoped<IUserTechnologyRepository, UserTechnologyRepository>();
+builder.Services.AddScoped<IUserProjectRepository, UserProjectRepository>();
+builder.Services.AddScoped<IUserCertificationRepository, UserCertificationRepository>();
+
+// Register Learner services
+builder.Services.AddScoped<IUserBadgeService, UserBadgeService>();
+builder.Services.AddScoped<IUserTechnologyService, UserTechnologyService>();
+builder.Services.AddScoped<IUserProjectService, UserProjectService>();
+builder.Services.AddScoped<IUserCertificationService, UserCertificationService>();
+builder.Services.AddScoped<IUserProfileService, UserProfileService>();
+
+// Register the FileService
+builder.Services.AddScoped<IFileService, FileService>();
+
+// Required for file uploads and URL generation
+builder.Services.AddHttpContextAccessor();
+
 // Add controllers
 builder.Services.AddControllers();
 
@@ -212,6 +240,32 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+// Ensure wwwroot directory exists
+var webRootPath = Path.Combine(builder.Environment.ContentRootPath, "wwwroot");
+if (!Directory.Exists(webRootPath))
+{
+    Directory.CreateDirectory(webRootPath);
+    Console.WriteLine($"Created wwwroot directory at: {webRootPath}");
+
+    // Create uploads subdirectories
+    var uploadsPath = Path.Combine(webRootPath, "uploads");
+    Directory.CreateDirectory(uploadsPath);
+
+    // Create specific upload folders
+    Directory.CreateDirectory(Path.Combine(uploadsPath, "avatars"));
+    Directory.CreateDirectory(Path.Combine(uploadsPath, "badges"));
+    Directory.CreateDirectory(Path.Combine(uploadsPath, "certifications"));
+
+    Console.WriteLine("Created upload subdirectories");
+}
+
+// Configure static files options
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new PhysicalFileProvider(webRootPath),
+    RequestPath = ""
+});
 
 // Apply CORS middleware BEFORE authentication middleware
 app.UseCors("AllowReactApp");
