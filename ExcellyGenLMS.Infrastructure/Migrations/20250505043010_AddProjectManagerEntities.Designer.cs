@@ -4,6 +4,7 @@ using ExcellyGenLMS.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace ExcellyGenLMS.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250505043010_AddProjectManagerEntities")]
+    partial class AddProjectManagerEntities
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -465,22 +468,20 @@ namespace ExcellyGenLMS.Infrastructure.Migrations
 
             modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Learner.Badge", b =>
                 {
-                    b.Property<string>("Id")
-                        .HasColumnType("nvarchar(450)");
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
 
-                    b.Property<string>("Color")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<string>("Description")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
-                    b.Property<string>("Icon")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                    b.Property<DateTime?>("EarnedDate")
+                        .HasColumnType("datetime2");
 
-                    b.Property<string>("ImagePath")
+                    b.Property<string>("Image")
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)");
 
@@ -510,37 +511,6 @@ namespace ExcellyGenLMS.Infrastructure.Migrations
                     b.ToTable("CVs");
                 });
 
-            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Learner.Certification", b =>
-                {
-                    b.Property<string>("Id")
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<string>("CredentialId")
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<string>("ImagePath")
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
-
-                    b.Property<string>("IssuingOrganization")
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("Certifications");
-                });
-
             modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Learner.ForumThread", b =>
                 {
                     b.Property<int>("ThreadId")
@@ -567,66 +537,6 @@ namespace ExcellyGenLMS.Infrastructure.Migrations
                     b.HasKey("ThreadId");
 
                     b.ToTable("ForumThreads");
-                });
-
-            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Learner.Project", b =>
-                {
-                    b.Property<string>("Id")
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.Property<DateTime?>("EndDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<string>("Role")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<DateTime>("StartDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("Projects");
-                });
-
-            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Learner.ProjectTechnology", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("ProjectId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<string>("TechnologyId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ProjectId");
-
-                    b.HasIndex("TechnologyId");
-
-                    b.ToTable("ProjectTechnologies");
                 });
 
             modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Learner.ThreadComReply", b =>
@@ -690,126 +600,6 @@ namespace ExcellyGenLMS.Infrastructure.Migrations
                     b.HasIndex("ThreadId");
 
                     b.ToTable("ThreadComments");
-                });
-
-            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Learner.UserBadge", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("BadgeId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<DateTime>("EarnedDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<bool>("IsRead")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("BadgeId");
-
-                    b.HasIndex("UserId");
-
-                    b.ToTable("UserBadges");
-                });
-
-            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Learner.UserCertification", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("CertificationId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<DateTime>("IssueDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CertificationId");
-
-                    b.HasIndex("UserId");
-
-                    b.ToTable("UserCertifications");
-                });
-
-            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Learner.UserProject", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("AssignedDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("ProjectId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ProjectId");
-
-                    b.HasIndex("UserId");
-
-                    b.ToTable("UserProjects");
-                });
-
-            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Learner.UserTechnology", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("AddedDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("TechnologyId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("TechnologyId");
-
-                    b.HasIndex("UserId");
-
-                    b.ToTable("UserTechnologies");
                 });
 
             modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Notifications.Notification", b =>
@@ -1100,25 +890,6 @@ namespace ExcellyGenLMS.Infrastructure.Migrations
                     b.Navigation("QuizBank");
                 });
 
-            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Learner.ProjectTechnology", b =>
-                {
-                    b.HasOne("ExcellyGenLMS.Core.Entities.Learner.Project", "Project")
-                        .WithMany("Technologies")
-                        .HasForeignKey("ProjectId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("ExcellyGenLMS.Core.Entities.Admin.Technology", "Technology")
-                        .WithMany()
-                        .HasForeignKey("TechnologyId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Project");
-
-                    b.Navigation("Technology");
-                });
-
             modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Learner.ThreadComReply", b =>
                 {
                     b.HasOne("ExcellyGenLMS.Core.Entities.Learner.ThreadComment", "Comment")
@@ -1148,7 +919,6 @@ namespace ExcellyGenLMS.Infrastructure.Migrations
 
                     b.Navigation("Thread");
                 });
-
 
             modelBuilder.Entity("ExcellyGenLMS.Core.Entities.ProjectManager.EmployeeAssignment", b =>
                 {
@@ -1184,54 +954,9 @@ namespace ExcellyGenLMS.Infrastructure.Migrations
                 {
                     b.HasOne("ExcellyGenLMS.Core.Entities.ProjectManager.Project", "Project")
                         .WithMany("ProjectTechnologies")
-
-            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Learner.UserBadge", b =>
-                {
-                    b.HasOne("ExcellyGenLMS.Core.Entities.Learner.Badge", "Badge")
-                        .WithMany("UserBadges")
-                        .HasForeignKey("BadgeId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("ExcellyGenLMS.Core.Entities.Auth.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Badge");
-
-                    b.Navigation("User");
-                });
-
-            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Learner.UserCertification", b =>
-                {
-                    b.HasOne("ExcellyGenLMS.Core.Entities.Learner.Certification", "Certification")
-                        .WithMany("UserCertifications")
-                        .HasForeignKey("CertificationId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("ExcellyGenLMS.Core.Entities.Auth.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Certification");
-
-                    b.Navigation("User");
-                });
-
-            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Learner.UserProject", b =>
-                {
-                    b.HasOne("ExcellyGenLMS.Core.Entities.Learner.Project", "Project")
-                        .WithMany("UserProjects")
-
                         .HasForeignKey("ProjectId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
 
                     b.HasOne("ExcellyGenLMS.Core.Entities.Admin.Technology", "Technology")
                         .WithMany()
@@ -1242,36 +967,6 @@ namespace ExcellyGenLMS.Infrastructure.Migrations
                     b.Navigation("Project");
 
                     b.Navigation("Technology");
-
-                    b.HasOne("ExcellyGenLMS.Core.Entities.Auth.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Project");
-
-                    b.Navigation("User");
-                });
-
-            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Learner.UserTechnology", b =>
-                {
-                    b.HasOne("ExcellyGenLMS.Core.Entities.Admin.Technology", "Technology")
-                        .WithMany()
-                        .HasForeignKey("TechnologyId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("ExcellyGenLMS.Core.Entities.Auth.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Technology");
-
-                    b.Navigation("User");
-
                 });
 
             modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Admin.CourseCategory", b =>
@@ -1301,7 +996,6 @@ namespace ExcellyGenLMS.Infrastructure.Migrations
                     b.Navigation("MCQQuestionOptions");
                 });
 
-
             modelBuilder.Entity("ExcellyGenLMS.Core.Entities.ProjectManager.Project", b =>
                 {
                     b.Navigation("EmployeeAssignments");
@@ -1309,23 +1003,6 @@ namespace ExcellyGenLMS.Infrastructure.Migrations
                     b.Navigation("ProjectRoles");
 
                     b.Navigation("ProjectTechnologies");
-
-            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Learner.Badge", b =>
-                {
-                    b.Navigation("UserBadges");
-                });
-
-            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Learner.Certification", b =>
-                {
-                    b.Navigation("UserCertifications");
-                });
-
-            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Learner.Project", b =>
-                {
-                    b.Navigation("Technologies");
-
-                    b.Navigation("UserProjects");
-
                 });
 #pragma warning restore 612, 618
         }
