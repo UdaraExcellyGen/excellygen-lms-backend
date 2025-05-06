@@ -877,136 +877,6 @@ namespace ExcellyGenLMS.Infrastructure.Migrations
                     b.ToTable("Notifications");
                 });
 
-            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.ProjectManager.EmployeeAssignment", b =>
-                {
-                    b.Property<string>("Id")
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("EmployeeId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<string>("ProjectId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<string>("Role")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<int>("WorkloadPercentage")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("EmployeeId");
-
-                    b.HasIndex("ProjectId");
-
-                    b.ToTable("EmployeeAssignments");
-                });
-
-            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.ProjectManager.Project", b =>
-                {
-                    b.Property<string>("Id")
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime?>("Deadline")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<int>("Progress")
-                        .HasColumnType("int");
-
-                    b.Property<string>("ShortDescription")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<DateTime?>("StartDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("Projects");
-                });
-
-            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.ProjectManager.ProjectRole", b =>
-                {
-                    b.Property<string>("Id")
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("ProjectId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<int>("RequiredCount")
-                        .HasColumnType("int");
-
-                    b.Property<string>("RoleName")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ProjectId");
-
-                    b.ToTable("ProjectRoles");
-                });
-
-            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.ProjectManager.ProjectTechnology", b =>
-                {
-                    b.Property<string>("Id")
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("ProjectId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<string>("TechnologyId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ProjectId");
-
-                    b.HasIndex("TechnologyId");
-
-                    b.ToTable("ProjectTechnologies");
-                });
-
             modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Auth.RefreshToken", b =>
                 {
                     b.HasOne("ExcellyGenLMS.Core.Entities.Auth.User", "User")
@@ -1149,42 +1019,6 @@ namespace ExcellyGenLMS.Infrastructure.Migrations
                     b.Navigation("Thread");
                 });
 
-
-            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.ProjectManager.EmployeeAssignment", b =>
-                {
-                    b.HasOne("ExcellyGenLMS.Core.Entities.Auth.User", "Employee")
-                        .WithMany()
-                        .HasForeignKey("EmployeeId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("ExcellyGenLMS.Core.Entities.ProjectManager.Project", "Project")
-                        .WithMany("EmployeeAssignments")
-                        .HasForeignKey("ProjectId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Employee");
-
-                    b.Navigation("Project");
-                });
-
-            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.ProjectManager.ProjectRole", b =>
-                {
-                    b.HasOne("ExcellyGenLMS.Core.Entities.ProjectManager.Project", "Project")
-                        .WithMany("ProjectRoles")
-                        .HasForeignKey("ProjectId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Project");
-                });
-
-            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.ProjectManager.ProjectTechnology", b =>
-                {
-                    b.HasOne("ExcellyGenLMS.Core.Entities.ProjectManager.Project", "Project")
-                        .WithMany("ProjectTechnologies")
-
             modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Learner.UserBadge", b =>
                 {
                     b.HasOne("ExcellyGenLMS.Core.Entities.Learner.Badge", "Badge")
@@ -1227,21 +1061,9 @@ namespace ExcellyGenLMS.Infrastructure.Migrations
                 {
                     b.HasOne("ExcellyGenLMS.Core.Entities.Learner.Project", "Project")
                         .WithMany("UserProjects")
-
                         .HasForeignKey("ProjectId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-
-                    b.HasOne("ExcellyGenLMS.Core.Entities.Admin.Technology", "Technology")
-                        .WithMany()
-                        .HasForeignKey("TechnologyId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Project");
-
-                    b.Navigation("Technology");
 
                     b.HasOne("ExcellyGenLMS.Core.Entities.Auth.User", "User")
                         .WithMany()
@@ -1271,7 +1093,6 @@ namespace ExcellyGenLMS.Infrastructure.Migrations
                     b.Navigation("Technology");
 
                     b.Navigation("User");
-
                 });
 
             modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Admin.CourseCategory", b =>
@@ -1301,15 +1122,6 @@ namespace ExcellyGenLMS.Infrastructure.Migrations
                     b.Navigation("MCQQuestionOptions");
                 });
 
-
-            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.ProjectManager.Project", b =>
-                {
-                    b.Navigation("EmployeeAssignments");
-
-                    b.Navigation("ProjectRoles");
-
-                    b.Navigation("ProjectTechnologies");
-
             modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Learner.Badge", b =>
                 {
                     b.Navigation("UserBadges");
@@ -1325,7 +1137,6 @@ namespace ExcellyGenLMS.Infrastructure.Migrations
                     b.Navigation("Technologies");
 
                     b.Navigation("UserProjects");
-
                 });
 #pragma warning restore 612, 618
         }

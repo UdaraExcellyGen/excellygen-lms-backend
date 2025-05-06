@@ -29,11 +29,6 @@ using ExcellyGenLMS.Infrastructure.Data.Repositories.Learner;
 using ExcellyGenLMS.Application.Interfaces.Learner;
 using ExcellyGenLMS.Application.Services.Learner;
 
-using ExcellyGenLMS.Core.Interfaces.Repositories.ProjectManager;
-using ExcellyGenLMS.Infrastructure.Data.Repositories.ProjectManager;
-using ExcellyGenLMS.Application.Interfaces.ProjectManager;
-using ExcellyGenLMS.Application.Services.ProjectManager;
-
 var builder = WebApplication.CreateBuilder(args);
 
 // Add DbContext configuration
@@ -48,9 +43,9 @@ builder.Services.AddCors(options =>
         {
             policyBuilder
                 .WithOrigins(
-                    "http://localhost:5173",      // Vite development server
-                    "http://localhost:3000",      // React standard port
-                    "https://excelly-lms-f3500.web.app" // Production
+                    "http://localhost:5173",  // Vite development server
+                    "http://localhost:3000",  // React standard port
+                    "https://excelly-lms-f3500.web.app"  // Production
                 )
                 .AllowAnyMethod()
                 .AllowAnyHeader()
@@ -153,38 +148,33 @@ builder.Services.AddAuthentication(options =>
 // Register IPasswordHasher service that UserService depends on
 builder.Services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
 
-// --- Register Application Services and Repositories ---
-
-// Auth
+// Register repositories
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
+
+// Register services
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IFirebaseAuthService, FirebaseAuthService>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 
-// Admin - User Management
+// Register User Management Service
 builder.Services.AddScoped<IUserManagementService, UserManagementService>();
 
-// Admin - Tech Management
+// Register Tech Management Service
 builder.Services.AddScoped<ITechnologyRepository, TechnologyRepository>();
 builder.Services.AddScoped<ITechnologyService, TechnologyService>();
 
-// Admin - Course Categories
+// Register CourseCategory repositories and services
 builder.Services.AddScoped<ICourseCategoryRepository, CourseCategoryRepository>();
 builder.Services.AddScoped<ICourseCategoryService, CourseCategoryService>();
 
-// Admin - Course Management
+// Register Course Admin repositories and services
 builder.Services.AddScoped<ICourseAdminRepository, CourseAdminRepository>();
 builder.Services.AddScoped<ICourseAdminService, CourseAdminService>();
 
-// Admin - Dashboard
+// Register Dashboard Service
 builder.Services.AddScoped<IDashboardService, DashboardService>();
-
-
-builder.Services.AddScoped<IProjectRepository, ProjectRepository>();
-builder.Services.AddScoped<IProjectService, ProjectService>();
-
 
 // Register Learner repositories
 builder.Services.AddScoped<IUserBadgeRepository, UserBadgeRepository>();
@@ -204,7 +194,6 @@ builder.Services.AddScoped<IFileService, FileService>();
 
 // Required for file uploads and URL generation
 builder.Services.AddHttpContextAccessor();
-
 
 // Add controllers
 builder.Services.AddControllers();
@@ -283,7 +272,7 @@ app.UseCors("AllowReactApp");
 
 app.UseAuthentication();
 app.UseAuthorization();
-app.UseRoleAuthorization(); // Ensure custom middleware is used correctly
+app.UseRoleAuthorization();
 app.MapControllers();
 
 app.Run();

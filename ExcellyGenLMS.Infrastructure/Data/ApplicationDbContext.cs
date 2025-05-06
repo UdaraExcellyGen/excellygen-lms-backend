@@ -4,14 +4,10 @@ using ExcellyGenLMS.Core.Entities.Admin;
 using ExcellyGenLMS.Core.Entities.Learner;
 using ExcellyGenLMS.Core.Entities.Course;
 using ExcellyGenLMS.Core.Entities.Notifications;
-using ExcellyGenLMS.Core.Entities.ProjectManager;
-// Add using statements for your new entities if they are in different namespaces
-// e.g., using ExcellyGenLMS.Core.Entities.ProjectManagement;
 using System.Text.Json;
 using System.Linq;
 using System;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
-using Microsoft.EntityFrameworkCore.Metadata; // Required for ValueComparer
 
 namespace ExcellyGenLMS.Infrastructure.Data
 {
@@ -58,20 +54,9 @@ namespace ExcellyGenLMS.Infrastructure.Data
         public DbSet<Enrollment> Enrollments { get; set; }
         public DbSet<Certificate> Certificates { get; set; }
 
-        // --- NEW: Project Management Module ---
-        public DbSet<Project> Projects { get; set; }
-        public DbSet<EmployeeAssignment> EmployeeAssignments { get; set; }
-        public DbSet<ProjectTechnology> ProjectTechnologies { get; set; }
-        public DbSet<ProjectRole> ProjectRoles { get; set; }
-        // Assuming you have an Employee entity. If not, you might need to add:
-        // public DbSet<Employee> Employees { get; set; }
-        // Or adjust EmployeeAssignment relationship to point to User if applicable.
-
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
-
-            // --- Existing Configurations ---
 
             // Configure User entity with improved JSON serialization
             modelBuilder.Entity<User>()
@@ -121,7 +106,7 @@ namespace ExcellyGenLMS.Infrastructure.Data
 
             modelBuilder.Entity<ThreadComment>()
                 .HasOne(c => c.Thread)
-                .WithMany() // Assuming ForumThread doesn't have a Comments collection property
+                .WithMany()
                 .HasForeignKey(c => c.ThreadId)
                 .OnDelete(DeleteBehavior.Cascade);
 
@@ -131,13 +116,13 @@ namespace ExcellyGenLMS.Infrastructure.Data
 
             modelBuilder.Entity<ThreadComReply>()
                 .HasOne(r => r.Thread)
-                .WithMany() // Assuming ForumThread doesn't have a Replies collection property
+                .WithMany()
                 .HasForeignKey(r => r.ThreadId)
-                .OnDelete(DeleteBehavior.NoAction); // Avoid cascade delete cycles if replies link directly to thread
+                .OnDelete(DeleteBehavior.NoAction);
 
             modelBuilder.Entity<ThreadComReply>()
                 .HasOne(r => r.Comment)
-                .WithMany() // Assuming ThreadComment doesn't have a Replies collection property
+                .WithMany()
                 .HasForeignKey(r => r.CommentId)
                 .OnDelete(DeleteBehavior.Cascade);
 
@@ -243,7 +228,7 @@ namespace ExcellyGenLMS.Infrastructure.Data
 
             modelBuilder.Entity<Notification>()
                 .Property(e => e.CreatedAt)
-                .HasDefaultValueSql("GETUTCDATE()"); // Use GETUTCDATE() for UTC time
+                .HasDefaultValueSql("GETUTCDATE()");
 
             modelBuilder.Entity<Notification>()
                 .Property(e => e.IsRead)
@@ -259,7 +244,7 @@ namespace ExcellyGenLMS.Infrastructure.Data
 
             modelBuilder.Entity<Course>()
                 .Property(e => e.Status)
-                .HasConversion<string>(); // Assuming Status is an Enum
+                .HasConversion<string>();
 
             // Configure Course-Lesson relationship
             modelBuilder.Entity<Course>()
@@ -276,9 +261,10 @@ namespace ExcellyGenLMS.Infrastructure.Data
             modelBuilder.Entity<CourseDocument>()
                 .HasKey(e => e.Id);
 
+            // Configure CourseDocument entity
             modelBuilder.Entity<CourseDocument>()
                 .Property(e => e.DocumentType)
-                .HasConversion<string>(); // Assuming DocumentType is an Enum
+                .HasConversion<string>();
 
             // Configure Lesson-CourseDocument relationship
             modelBuilder.Entity<Lesson>()
@@ -287,95 +273,37 @@ namespace ExcellyGenLMS.Infrastructure.Data
                 .HasForeignKey(d => d.LessonId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            // Configure Quiz entity --- UPDATED ---
-            modelBuilder.Entity<Quiz>()
-                 .HasKey(e => e.QuizId); // Changed from e.Id
+            // Configure Quiz entity
+            modelBuilder.Entity<Quiz>();
 
-            // Configure MCQQuestionOption entity --- UPDATED ---
-            modelBuilder.Entity<MCQQuestionOption>()
-                 .HasKey(e => e.McqOptionId); // Changed from e.Id
+            // Configure MCQQuestionOption entity
+            modelBuilder.Entity<MCQQuestionOption>();
 
-            // Configure QuizBank entity --- UPDATED ---
-            modelBuilder.Entity<QuizBank>()
-                 .HasKey(e => e.QuizBankId); // Changed from e.Id
+            // Configure QuizBank entity
+            modelBuilder.Entity<QuizBank>();
 
-            // Configure QuizBankQuestion entity --- UPDATED ---
-            modelBuilder.Entity<QuizBankQuestion>()
-                 .HasKey(e => e.QuizBankQuestionId); // Changed from e.Id
+            // Configure QuizBankQuestion entity
+            modelBuilder.Entity<QuizBankQuestion>();
 
             // Configure QuizBank-QuizBankQuestion relationship
             modelBuilder.Entity<QuizBank>()
                 .HasMany(qb => qb.QuizBankQuestions)
                 .WithOne(qbQ => qbQ.QuizBank)
-                .HasForeignKey(qbQ => qbQ.QuizBankId) // Ensure this matches the FK property name in QuizBankQuestion
+                .HasForeignKey(qbQ => qbQ.QuizBankId)
                 .OnDelete(DeleteBehavior.Cascade);
 
             // Configure QuizBankQuestion-MCQQuestionOption relationship
             modelBuilder.Entity<QuizBankQuestion>()
                 .HasMany(qbQ => qbQ.MCQQuestionOptions)
                 .WithOne(mcqOption => mcqOption.QuizBankQuestion)
-                .HasForeignKey(mcqOption => mcqOption.QuizBankQuestionId) // Ensure this matches the FK property name in MCQQuestionOption
+                .HasForeignKey(mcqOption => mcqOption.QuizBankQuestionId)
                 .OnDelete(DeleteBehavior.Cascade);
 
             // Configure Enrollment entity
-            modelBuilder.Entity<Enrollment>()
-                 .HasKey(e => e.Id); // Example if Id is the key
+            modelBuilder.Entity<Enrollment>();
 
             // Configure Certificate entity
-            modelBuilder.Entity<Certificate>()
-                 .HasKey(e => e.Id); // Example if Id is the key
-
-
-            // --- NEW: Project Manager configurations ---
-            modelBuilder.Entity<Project>()
-                .HasKey(e => e.Id);
-
-            modelBuilder.Entity<EmployeeAssignment>()
-                .HasKey(e => e.Id);
-
-            modelBuilder.Entity<EmployeeAssignment>()
-                .HasOne(e => e.Project)
-                .WithMany(p => p.EmployeeAssignments) // Assumes Project has ICollection<EmployeeAssignment> EmployeeAssignments
-                .HasForeignKey(e => e.ProjectId)
-                .OnDelete(DeleteBehavior.Cascade); // Deleting a project deletes its assignments
-
-            modelBuilder.Entity<EmployeeAssignment>()
-                .HasOne(e => e.Employee) // Assumes EmployeeAssignment has an Employee navigation property and Employee entity exists
-                .WithMany() // Assumes Employee entity doesn't have a navigation property back to assignments
-                .HasForeignKey(e => e.EmployeeId)
-                .OnDelete(DeleteBehavior.Restrict); // Prevent deleting an Employee if they are assigned to a project
-
-            modelBuilder.Entity<ProjectTechnology>()
-                .HasKey(e => e.Id);
-
-            modelBuilder.Entity<ProjectTechnology>()
-                .HasOne(pt => pt.Project)
-                .WithMany(p => p.ProjectTechnologies) // Assumes Project has ICollection<ProjectTechnology> ProjectTechnologies
-                .HasForeignKey(pt => pt.ProjectId)
-                .OnDelete(DeleteBehavior.Cascade); // Deleting a project deletes its technology associations
-
-            modelBuilder.Entity<ProjectTechnology>()
-                .HasOne(pt => pt.Technology) // Assumes ProjectTechnology has a Technology navigation property
-                .WithMany() // Assumes Technology entity doesn't have a navigation property back to project associations
-                .HasForeignKey(pt => pt.TechnologyId)
-                .OnDelete(DeleteBehavior.Restrict); // Prevent deleting a Technology if it's used in a project
-
-            modelBuilder.Entity<ProjectRole>()
-                .HasKey(e => e.Id);
-
-            modelBuilder.Entity<ProjectRole>()
-                .HasOne(pr => pr.Project)
-                .WithMany(p => p.ProjectRoles) // Assumes Project has ICollection<ProjectRole> ProjectRoles
-                .HasForeignKey(pr => pr.ProjectId)
-                .OnDelete(DeleteBehavior.Cascade); // Deleting a project deletes its role associations
-
-            // Consider adding configurations for ProjectRole relationship with Employee/User if needed
-            // Example:
-            // modelBuilder.Entity<ProjectRole>()
-            //     .HasOne(pr => pr.Employee) // Assuming ProjectRole has an Employee navigation property
-            //     .WithMany() // Assuming Employee doesn't navigate back to ProjectRoles directly
-            //     .HasForeignKey(pr => pr.EmployeeId)
-            //     .OnDelete(DeleteBehavior.Restrict); // Prevent deleting Employee if assigned a role
+            modelBuilder.Entity<Certificate>();
         }
     }
 }
