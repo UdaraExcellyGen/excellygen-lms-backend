@@ -4,6 +4,7 @@ using ExcellyGenLMS.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace ExcellyGenLMS.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250506145327_AddProjectManagerEntities-r")]
+    partial class AddProjectManagerEntitiesr
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -543,47 +546,28 @@ namespace ExcellyGenLMS.Infrastructure.Migrations
 
             modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Learner.ForumThread", b =>
                 {
-                    b.Property<int>("Id")
+                    b.Property<int>("ThreadId")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasColumnName("ThreadId");
+                        .HasColumnType("int");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("ThreadId"));
 
                     b.Property<string>("Category")
                         .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)")
-                        .HasColumnName("Category");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Content")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)")
-                        .HasColumnName("Content");
+                        .HasColumnType("nvarchar(max)");
 
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2")
-                        .HasColumnName("Date");
-
-                    b.Property<string>("CreatorId")
+                    b.Property<string>("Creator")
                         .IsRequired()
-                        .HasColumnType("nvarchar(450)")
-                        .HasColumnName("Creator");
+                        .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("ImageUrl")
-                        .HasMaxLength(512)
-                        .HasColumnType("nvarchar(512)")
-                        .HasColumnName("ImageUrl");
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("datetime2");
 
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)")
-                        .HasColumnName("Title");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CreatorId");
+                    b.HasKey("ThreadId");
 
                     b.ToTable("ForumThreads");
                 });
@@ -652,34 +636,32 @@ namespace ExcellyGenLMS.Infrastructure.Migrations
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasColumnName("Id");
+                        .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<int>("CommentId")
-                        .HasColumnType("int")
-                        .HasColumnName("CommentId");
+                        .HasColumnType("int");
 
-                    b.Property<string>("CommentorId")
+                    b.Property<string>("Commentor")
                         .IsRequired()
-                        .HasColumnType("nvarchar(450)")
-                        .HasColumnName("Commentor");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Content")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)")
-                        .HasColumnName("Content");
+                        .HasColumnType("nvarchar(max)");
 
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2")
-                        .HasColumnName("Date");
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("ThreadId")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
                     b.HasIndex("CommentId");
 
-                    b.HasIndex("CommentorId");
+                    b.HasIndex("ThreadId");
 
                     b.ToTable("ThreadComReplies");
                 });
@@ -688,32 +670,25 @@ namespace ExcellyGenLMS.Infrastructure.Migrations
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasColumnName("Id");
+                        .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("CommentorId")
+                    b.Property<string>("Commentor")
                         .IsRequired()
-                        .HasColumnType("nvarchar(450)")
-                        .HasColumnName("Commentor");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Content")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)")
-                        .HasColumnName("Content");
+                        .HasColumnType("nvarchar(max)");
 
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2")
-                        .HasColumnName("Date");
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("datetime2");
 
                     b.Property<int>("ThreadId")
-                        .HasColumnType("int")
-                        .HasColumnName("ThreadId");
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("CommentorId");
 
                     b.HasIndex("ThreadId");
 
@@ -1114,13 +1089,13 @@ namespace ExcellyGenLMS.Infrastructure.Migrations
                     b.HasOne("ExcellyGenLMS.Core.Entities.Admin.CourseCategory", "Category")
                         .WithMany("Courses")
                         .HasForeignKey("CategoryId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.HasOne("ExcellyGenLMS.Core.Entities.Auth.User", "Creator")
                         .WithMany()
                         .HasForeignKey("CreatorId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.Navigation("Category");
@@ -1191,17 +1166,6 @@ namespace ExcellyGenLMS.Infrastructure.Migrations
                     b.Navigation("QuizBank");
                 });
 
-            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Learner.ForumThread", b =>
-                {
-                    b.HasOne("ExcellyGenLMS.Core.Entities.Auth.User", "Creator")
-                        .WithMany()
-                        .HasForeignKey("CreatorId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Creator");
-                });
-
             modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Learner.ProjectTechnology", b =>
                 {
                     b.HasOne("ExcellyGenLMS.Core.Entities.Learner.Project", "Project")
@@ -1224,37 +1188,29 @@ namespace ExcellyGenLMS.Infrastructure.Migrations
             modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Learner.ThreadComReply", b =>
                 {
                     b.HasOne("ExcellyGenLMS.Core.Entities.Learner.ThreadComment", "Comment")
-                        .WithMany("Replies")
+                        .WithMany()
                         .HasForeignKey("CommentId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("ExcellyGenLMS.Core.Entities.Auth.User", "Commentor")
+                    b.HasOne("ExcellyGenLMS.Core.Entities.Learner.ForumThread", "Thread")
                         .WithMany()
-                        .HasForeignKey("CommentorId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasForeignKey("ThreadId")
+                        .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
                     b.Navigation("Comment");
 
-                    b.Navigation("Commentor");
+                    b.Navigation("Thread");
                 });
 
             modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Learner.ThreadComment", b =>
                 {
-                    b.HasOne("ExcellyGenLMS.Core.Entities.Auth.User", "Commentor")
-                        .WithMany()
-                        .HasForeignKey("CommentorId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
                     b.HasOne("ExcellyGenLMS.Core.Entities.Learner.ForumThread", "Thread")
-                        .WithMany("Comments")
+                        .WithMany()
                         .HasForeignKey("ThreadId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.Navigation("Commentor");
 
                     b.Navigation("Thread");
                 });
@@ -1449,21 +1405,11 @@ namespace ExcellyGenLMS.Infrastructure.Migrations
                     b.Navigation("UserCertifications");
                 });
 
-            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Learner.ForumThread", b =>
-                {
-                    b.Navigation("Comments");
-                });
-
             modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Learner.Project", b =>
                 {
                     b.Navigation("Technologies");
 
                     b.Navigation("UserProjects");
-                });
-
-            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Learner.ThreadComment", b =>
-                {
-                    b.Navigation("Replies");
                 });
 
             modelBuilder.Entity("ExcellyGenLMS.Core.Entities.ProjectManager.PMProject", b =>

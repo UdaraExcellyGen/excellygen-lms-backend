@@ -4,6 +4,7 @@ using ExcellyGenLMS.Core.Entities.Admin;
 using ExcellyGenLMS.Core.Entities.Learner; // Includes Forum entities
 using ExcellyGenLMS.Core.Entities.Course;
 using ExcellyGenLMS.Core.Entities.Notifications;
+using ExcellyGenLMS.Core.Entities.ProjectManager; // Added PM module import
 using System.Text.Json;
 using System.Linq; // For SequenceEqual and Aggregate
 using System; // For HashCode
@@ -53,6 +54,14 @@ namespace ExcellyGenLMS.Infrastructure.Data
         public DbSet<QuizBankQuestion> QuizBankQuestions { get; set; }
         public DbSet<Enrollment> Enrollments { get; set; }
         public DbSet<Certificate> Certificates { get; set; } // This is Course.Certificate
+
+        // Project Manager Module
+        public DbSet<PMProject> PMProjects { get; set; }
+        public DbSet<PMEmployeeAssignment> PMEmployeeAssignments { get; set; }
+        public DbSet<PMProjectTechnology> PMProjectTechnologies { get; set; }
+        public DbSet<PMProjectRequiredRole> PMProjectRequiredRoles { get; set; }
+        public DbSet<PMRoleDefinition> PMRoleDefinitions { get; set; }
+        public DbSet<PMNotification> PMNotifications { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -345,6 +354,80 @@ namespace ExcellyGenLMS.Infrastructure.Data
                 .WithMany() // User can create many Courses
                 .HasForeignKey(c => c.CreatorId)
                 .OnDelete(DeleteBehavior.Restrict);
+                
+            // ========= Project Manager Module Configuration ==========
+
+            // Configure PMProject entity
+            modelBuilder.Entity<PMProject>()
+                .HasKey(e => e.Id);
+
+            modelBuilder.Entity<PMProject>()
+                .HasOne(e => e.Creator)
+                .WithMany()
+                .HasForeignKey(e => e.CreatorId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Configure PMEmployeeAssignment entity
+            modelBuilder.Entity<PMEmployeeAssignment>()
+                .HasKey(e => e.Id);
+
+            modelBuilder.Entity<PMEmployeeAssignment>()
+                .HasOne(e => e.Project)
+                .WithMany(p => p.EmployeeAssignments)
+                .HasForeignKey(e => e.ProjectId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<PMEmployeeAssignment>()
+                .HasOne(e => e.Employee)
+                .WithMany()
+                .HasForeignKey(e => e.EmployeeId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Configure PMProjectTechnology entity
+            modelBuilder.Entity<PMProjectTechnology>()
+                .HasKey(e => e.Id);
+
+            modelBuilder.Entity<PMProjectTechnology>()
+                .HasOne(e => e.Project)
+                .WithMany(p => p.Technologies)
+                .HasForeignKey(e => e.ProjectId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<PMProjectTechnology>()
+                .HasOne(e => e.Technology)
+                .WithMany()
+                .HasForeignKey(e => e.TechnologyId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Configure PMProjectRequiredRole entity
+            modelBuilder.Entity<PMProjectRequiredRole>()
+                .HasKey(e => e.Id);
+
+            modelBuilder.Entity<PMProjectRequiredRole>()
+                .HasOne(e => e.Project)
+                .WithMany(p => p.RequiredRoles)
+                .HasForeignKey(e => e.ProjectId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Configure PMRoleDefinition entity
+            modelBuilder.Entity<PMRoleDefinition>()
+                .HasKey(e => e.Id);
+
+            // Configure PMNotification entity
+            modelBuilder.Entity<PMNotification>()
+                .HasKey(e => e.Id);
+
+            modelBuilder.Entity<PMNotification>()
+                .HasOne(e => e.Project)
+                .WithMany()
+                .HasForeignKey(e => e.ProjectId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<PMNotification>()
+                .HasOne(e => e.Recipient)
+                .WithMany()
+                .HasForeignKey(e => e.RecipientId)
+                .OnDelete(DeleteBehavior.SetNull);
         }
     }
 }
