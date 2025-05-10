@@ -6,5 +6,8 @@ namespace ExcellyGenLMS.Application.DTOs.Auth
         public required string RefreshToken { get; set; }
         public required DateTime ExpiresAt { get; set; }
         public required string CurrentRole { get; set; }
+
+        // Add this new property to the existing TokenDto class
+        public bool RequirePasswordChange { get; set; }
     }
 }

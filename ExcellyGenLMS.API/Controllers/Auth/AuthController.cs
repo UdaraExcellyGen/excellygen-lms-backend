@@ -80,7 +80,8 @@ namespace ExcellyGenLMS.API.Controllers.Auth
                         Name = user.Name,
                         Email = user.Email,
                         Roles = user.Roles ?? new List<string>(),
-                        Token = tokenDto
+                        Token = tokenDto,
+                        RequirePasswordChange = user.RequirePasswordChange
                     };
 
                     _logger.LogInformation($"Login successful for user: {user.Id}");
@@ -105,7 +106,8 @@ namespace ExcellyGenLMS.API.Controllers.Auth
                         Name = user.Name,
                         Email = user.Email,
                         Roles = user.Roles ?? new List<string>(),
-                        Token = tokenDto
+                        Token = tokenDto,
+                        RequirePasswordChange = user.RequirePasswordChange
                     };
 
                     _logger.LogInformation($"Login successful for user: {user.Id} (fallback method)");
@@ -125,6 +127,28 @@ namespace ExcellyGenLMS.API.Controllers.Auth
                     _logger.LogError($"Inner exception: {ex.InnerException.Message}");
                 }
                 return StatusCode(500, new { message = "An error occurred during login", details = ex.Message });
+            }
+        }
+
+        [HttpPost("change-password")]
+        [Authorize]
+        public async Task<ActionResult> ChangePassword([FromBody] ChangePasswordDto changePasswordDto)
+        {
+            try
+            {
+                _logger.LogInformation($"Password change request for user: {changePasswordDto.UserId}");
+                var result = await _authService.ChangePasswordAsync(changePasswordDto);
+                return Ok(new { success = result, message = "Password changed successfully" });
+            }
+            catch (InvalidOperationException ex)
+            {
+                _logger.LogWarning($"Password change failed: {ex.Message}");
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Password change error: {ex.Message}");
+                return StatusCode(500, new { message = "An error occurred during password change", details = ex.Message });
             }
         }
 
