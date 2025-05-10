@@ -9,7 +9,7 @@ namespace ExcellyGenLMS.API.Controllers.Admin
 {
     [ApiController]
     [Route("api/[controller]")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,ProjectManager")]  // Updated to include ProjectManager role
     public class TechnologiesController : ControllerBase
     {
         private readonly ITechnologyService _technologyService;

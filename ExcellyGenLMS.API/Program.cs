@@ -27,13 +27,17 @@ using System.IO;
 using ExcellyGenLMS.Core.Interfaces.Repositories.Learner;
 using ExcellyGenLMS.Application.Interfaces.Learner;
 
-// Learner Module Implementation imports (Infrastructure and Application)
-// vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
-using ExcellyGenLMS.Infrastructure.Data.Repositories.Learner; // <--- !!! THIS USING STATEMENT IS CRUCIAL for CS0246 Errors !!!
-// ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-using ExcellyGenLMS.Application.Services.Learner;
-using System;
+// Project Manager Module Interface imports
+using ExcellyGenLMS.Core.Interfaces.Repositories.ProjectManager;
+using ExcellyGenLMS.Application.Interfaces.ProjectManager;
 
+// Learner Module Implementation imports (Infrastructure and Application)
+using ExcellyGenLMS.Infrastructure.Data.Repositories.Learner;
+using ExcellyGenLMS.Application.Services.Learner;
+
+// Project Manager Module Implementation imports
+using ExcellyGenLMS.Infrastructure.Data.Repositories.ProjectManager;
+using ExcellyGenLMS.Application.Services.ProjectManager;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -141,41 +145,56 @@ builder.Services.AddAuthentication(options =>
 builder.Services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
 
 // --- Register repositories ---
+// Auth repositories
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
+
+// Admin repositories
 builder.Services.AddScoped<ITechnologyRepository, TechnologyRepository>();
 builder.Services.AddScoped<ICourseCategoryRepository, CourseCategoryRepository>();
 builder.Services.AddScoped<ICourseAdminRepository, CourseAdminRepository>();
+
+// Learner repositories
 builder.Services.AddScoped<IUserBadgeRepository, UserBadgeRepository>();
 builder.Services.AddScoped<IUserTechnologyRepository, UserTechnologyRepository>();
 builder.Services.AddScoped<IUserProjectRepository, UserProjectRepository>();
 builder.Services.AddScoped<IUserCertificationRepository, UserCertificationRepository>();
-
-// Register Forum repositories
 builder.Services.AddScoped<IForumThreadRepository, ForumThreadRepository>();
-builder.Services.AddScoped<IThreadCommentRepository, ThreadCommentRepository>();         // Requires 'using ExcellyGenLMS.Infrastructure.Data.Repositories.Learner;'
-builder.Services.AddScoped<IThreadComReplyRepository, ThreadComReplyRepository>();       // Requires 'using ExcellyGenLMS.Infrastructure.Data.Repositories.Learner;'
+builder.Services.AddScoped<IThreadCommentRepository, ThreadCommentRepository>();
+builder.Services.AddScoped<IThreadComReplyRepository, ThreadComReplyRepository>();
+
+// ProjectManager repositories
+builder.Services.AddScoped<IProjectRepository, ProjectRepository>();
+builder.Services.AddScoped<IRoleRepository, RoleRepository>();
 
 // --- Register services ---
+// Auth services
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IFirebaseAuthService, FirebaseAuthService>();
 builder.Services.AddScoped<ITokenService, TokenService>();
+
+// Admin services
 builder.Services.AddScoped<IUserManagementService, UserManagementService>();
 builder.Services.AddScoped<ITechnologyService, TechnologyService>();
 builder.Services.AddScoped<ICourseCategoryService, CourseCategoryService>();
 builder.Services.AddScoped<ICourseAdminService, CourseAdminService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
+
+// Learner services
 builder.Services.AddScoped<IUserBadgeService, UserBadgeService>();
 builder.Services.AddScoped<IUserTechnologyService, UserTechnologyService>();
 builder.Services.AddScoped<IUserProjectService, UserProjectService>();
 builder.Services.AddScoped<IUserCertificationService, UserCertificationService>();
 builder.Services.AddScoped<IUserProfileService, UserProfileService>();
+builder.Services.AddScoped<IForumService, ForumService>();
 builder.Services.AddScoped<IFileService, FileService>();
 
-// Register Forum service
-builder.Services.AddScoped<IForumService, ForumService>();
 
+// ProjectManager services
+builder.Services.AddScoped<ExcellyGenLMS.Application.Interfaces.ProjectManager.IProjectService, ExcellyGenLMS.Application.Services.ProjectManager.ProjectService>();
+builder.Services.AddScoped<ExcellyGenLMS.Application.Interfaces.ProjectManager.IRoleService, ExcellyGenLMS.Application.Services.ProjectManager.RoleService>();
+builder.Services.AddScoped<ExcellyGenLMS.Application.Interfaces.ProjectManager.IPMTechnologyService, ExcellyGenLMS.Application.Services.ProjectManager.PMTechnologyService>();
 
 // --- Required for accessing HttpContext ---
 builder.Services.AddHttpContextAccessor();
