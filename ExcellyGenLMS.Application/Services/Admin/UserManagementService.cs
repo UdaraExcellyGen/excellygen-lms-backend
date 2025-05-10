@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using System.Security.Cryptography;
 using ExcellyGenLMS.Application.DTOs.Admin;
 using ExcellyGenLMS.Application.DTOs.Auth;
 using ExcellyGenLMS.Application.Interfaces.Admin;
@@ -30,9 +31,9 @@ namespace ExcellyGenLMS.Application.Services.Admin
             IFirebaseAuthService firebaseAuthService,
             ILogger<UserManagementService> logger)
         {
-            _userRepository = userRepository;
-            _firebaseAuthService = firebaseAuthService;
-            _logger = logger;
+            _userRepository = userRepository ?? throw new ArgumentNullException(nameof(userRepository));
+            _firebaseAuthService = firebaseAuthService ?? throw new ArgumentNullException(nameof(firebaseAuthService));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
         public async Task<List<AdminUserDto>> GetAllUsersAsync()
@@ -83,6 +84,18 @@ namespace ExcellyGenLMS.Application.Services.Admin
                 _logger.LogInformation($"Formatted phone number from '{createUserDto.Phone}' to '{formattedPhone}'");
                 createUserDto.Phone = formattedPhone;
 
+                // Generate a temporary password if not provided
+                string password = !string.IsNullOrEmpty(createUserDto.Password)
+                    ? createUserDto.Password
+                    : GenerateTemporaryPassword();
+
+                bool isTemporaryPassword = string.IsNullOrEmpty(createUserDto.Password);
+
+                if (isTemporaryPassword)
+                {
+                    _logger.LogInformation($"Generated temporary password for user {createUserDto.Email}");
+                }
+
                 // First create the user in Firebase
                 string firebaseUid;
                 try
@@ -90,7 +103,7 @@ namespace ExcellyGenLMS.Application.Services.Admin
                     firebaseUid = await _firebaseAuthService.CreateUserAsync(new CreateUserDto
                     {
                         Email = createUserDto.Email,
-                        Password = createUserDto.Password,
+                        Password = password,
                         Name = createUserDto.Name,
                         Phone = createUserDto.Phone,
                         Roles = createUserDto.Roles,
@@ -119,7 +132,8 @@ namespace ExcellyGenLMS.Application.Services.Admin
                     Status = "active", // New users are active by default
                     JoinedDate = DateTime.UtcNow,
                     FirebaseUid = firebaseUid, // Store the actual Firebase UID
-                    Avatar = "/avatars/default.jpg" // Default avatar
+                    Avatar = "/avatars/default.jpg", // Default avatar
+                    RequirePasswordChange = isTemporaryPassword // Set flag for temporary password
                 };
 
                 var success = await _userRepository.AddUserAsync(newUser);
@@ -128,7 +142,15 @@ namespace ExcellyGenLMS.Application.Services.Admin
                     throw new InvalidOperationException("Failed to save user to database");
                 }
 
-                return MapToAdminUserDto(newUser);
+                var userDto = MapToAdminUserDto(newUser);
+
+                // Only return the temporary password once during user creation
+                if (isTemporaryPassword)
+                {
+                    userDto.TemporaryPassword = password;
+                }
+
+                return userDto;
             }
             catch (Exception ex)
             {
@@ -162,12 +184,22 @@ namespace ExcellyGenLMS.Application.Services.Admin
                     }
                 }
 
+                // Generate a temporary password if requested
+                string? tempPassword = null;
+                if (updateUserDto.GenerateTemporaryPassword == true)
+                {
+                    tempPassword = GenerateTemporaryPassword();
+                    updateUserDto.Password = tempPassword;
+                    existingUser.RequirePasswordChange = true;
+                    _logger.LogInformation($"Generated new temporary password for user {existingUser.Email}");
+                }
+
                 // Update user properties
                 existingUser.Name = updateUserDto.Name;
                 existingUser.Email = updateUserDto.Email;
                 existingUser.Phone = updateUserDto.Phone;
                 existingUser.Roles = updateUserDto.Roles;
-                existingUser.Department = updateUserDto.Department;
+                existingUser.Department = updateUserDto.Department ?? string.Empty; // Fix for the warning
                 existingUser.Status = updateUserDto.Status;
 
                 // Update user in Firebase if necessary
@@ -199,9 +231,9 @@ namespace ExcellyGenLMS.Application.Services.Admin
                             Email = updateUserDto.Email,
                             Password = updateUserDto.Password ?? "Temp123!",
                             Name = updateUserDto.Name,
-                            Phone = updateUserDto.Phone ?? "",
+                            Phone = updateUserDto.Phone ?? string.Empty,
                             Roles = updateUserDto.Roles,
-                            Department = updateUserDto.Department ?? ""
+                            Department = updateUserDto.Department ?? string.Empty
                         });
 
                         existingUser.FirebaseUid = firebaseUid;
@@ -219,7 +251,15 @@ namespace ExcellyGenLMS.Application.Services.Admin
                     throw new InvalidOperationException("Failed to update user in database");
                 }
 
-                return MapToAdminUserDto(existingUser);
+                var userDto = MapToAdminUserDto(existingUser);
+
+                // Only return the temporary password once during update if it was generated
+                if (tempPassword != null)
+                {
+                    userDto.TemporaryPassword = tempPassword;
+                }
+
+                return userDto;
             }
             catch (Exception ex)
             {
@@ -320,6 +360,67 @@ namespace ExcellyGenLMS.Application.Services.Admin
             }
         }
 
+        // Generate a secure temporary password
+        private string GenerateTemporaryPassword()
+        {
+            const string uppercaseChars = "ABCDEFGHJKLMNPQRSTUVWXYZ"; // Omitting I and O which can be confused
+            const string lowercaseChars = "abcdefghijkmnopqrstuvwxyz"; // Omitting l which can be confused
+            const string digitChars = "23456789"; // Omitting 0 and 1 which can be confused
+            const string specialChars = "!@#$%^&*";
+
+            // Ensure we have at least one of each character type
+            char[] password = new char[12]; // 12 character password
+
+            using (var rng = RandomNumberGenerator.Create())
+            {
+                // Add one uppercase letter
+                password[0] = GetRandomChar(uppercaseChars, rng);
+
+                // Add one lowercase letter
+                password[1] = GetRandomChar(lowercaseChars, rng);
+
+                // Add one digit
+                password[2] = GetRandomChar(digitChars, rng);
+
+                // Add one special character
+                password[3] = GetRandomChar(specialChars, rng);
+
+                // Fill the rest with a mix
+                string allChars = uppercaseChars + lowercaseChars + digitChars + specialChars;
+                for (int i = 4; i < password.Length; i++)
+                {
+                    password[i] = GetRandomChar(allChars, rng);
+                }
+
+                // Shuffle the password to avoid predictable pattern
+                ShuffleArray(password, rng);
+            }
+
+            return new string(password);
+        }
+
+        private char GetRandomChar(string charSet, RandomNumberGenerator rng)
+        {
+            byte[] randomByte = new byte[1];
+            rng.GetBytes(randomByte);
+            return charSet[randomByte[0] % charSet.Length];
+        }
+
+        private void ShuffleArray<T>(T[] array, RandomNumberGenerator rng)
+        {
+            int n = array.Length;
+            while (n > 1)
+            {
+                byte[] randomBytes = new byte[1];
+                rng.GetBytes(randomBytes);
+                int k = randomBytes[0] % n;
+                n--;
+                T temp = array[n];
+                array[n] = array[k];
+                array[k] = temp;
+            }
+        }
+
         // Helper method to format phone numbers to E.164 format
         private string FormatPhoneNumber(string phoneNumber)
         {
@@ -404,7 +505,8 @@ namespace ExcellyGenLMS.Application.Services.Admin
                 JoinedDate = user.JoinedDate,
                 JobRole = user.JobRole,
                 About = user.About,
-                Avatar = user.Avatar
+                Avatar = user.Avatar,
+                RequirePasswordChange = user.RequirePasswordChange
             };
         }
 
