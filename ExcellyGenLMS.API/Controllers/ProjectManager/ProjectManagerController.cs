@@ -1,3 +1,5 @@
+// Path: ExcellyGenLMS.API/Controllers/ProjectManager/ProjectManagerController.cs
+
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -6,6 +8,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using ExcellyGenLMS.Application.DTOs.ProjectManager;
 using ExcellyGenLMS.Application.Interfaces.ProjectManager;
+using AdminDto = ExcellyGenLMS.Application.DTOs.Admin; // Using alias for Admin DTOs
+using System.Security.Claims;
 
 namespace ExcellyGenLMS.API.Controllers.ProjectManager
 {
@@ -17,13 +21,13 @@ namespace ExcellyGenLMS.API.Controllers.ProjectManager
         private readonly IProjectService _projectService;
         private readonly IRoleService _roleService;
         private readonly IPMTechnologyService _pmTechnologyService;
-        private readonly ILogger<ProjectManagerController> _logger;
+        private readonly ILogger<ProjectManagerController>? _logger;
 
         public ProjectManagerController(
             IProjectService projectService,
             IRoleService roleService,
             IPMTechnologyService pmTechnologyService,
-            ILogger<ProjectManagerController> logger = null)
+            ILogger<ProjectManagerController>? logger = null)
         {
             _projectService = projectService;
             _roleService = roleService;
@@ -227,19 +231,57 @@ namespace ExcellyGenLMS.API.Controllers.ProjectManager
         }
 
         // ----- Technology Endpoints -----
+        // Path: ExcellyGenLMS.API/Controllers/ProjectManager/ProjectManagerController.cs
 
-        [HttpGet("technologies")]
-        public async Task<ActionResult<IEnumerable<TechnologyDto>>> GetTechnologies()
+// Make sure this method exists in your controller with exactly this syntax:
+[HttpGet("tech-list")] // <- This combines with the controller route to become 'api/project-manager/tech-list'
+public async Task<ActionResult<IEnumerable<TechnologyDto>>> FetchTechnologyList()
+{
+    Console.WriteLine("ProjectManagerController.FetchTechnologyList method called");
+    _logger?.LogInformation("ProjectManagerController.FetchTechnologyList method called");
+    
+    try
+    {
+        var technologies = await _pmTechnologyService.GetTechnologiesAsync();
+        return Ok(technologies);
+    }
+    catch (Exception ex)
+    {
+        _logger?.LogError(ex, "Error fetching tech list");
+        return StatusCode(500, new { message = "An error occurred while fetching tech list", error = ex.Message });
+    }
+}
+
+        [HttpPost("technologies")]
+        public async Task<ActionResult<AdminDto.TechnologyDto>> CreateTechnology([FromBody] AdminDto.CreateTechnologyDto createTechnologyDto)
         {
             try
             {
-                var technologies = await _pmTechnologyService.GetTechnologiesAsync();
-                return Ok(technologies);
+                // Get current user ID
+                string creatorId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "system";
+                
+                // Always set as project manager when created through this endpoint
+                string creatorType = "project_manager";
+                
+                _logger?.LogInformation($"Creating technology as project manager: {createTechnologyDto.Name}");
+                
+                // Use the admin service to create the technology
+                var adminTechnologyService = HttpContext.RequestServices.GetService<ExcellyGenLMS.Application.Interfaces.Admin.ITechnologyService>();
+                
+                if (adminTechnologyService == null)
+                {
+                    return StatusCode(500, new { message = "Technology service unavailable" });
+                }
+                
+                var technology = await adminTechnologyService.CreateTechnologyAsync(createTechnologyDto, creatorId, creatorType);
+                
+                // Return a 201 Created response
+                return Created($"/api/project-manager/tech-list", technology);
             }
             catch (Exception ex)
             {
-                _logger?.LogError(ex, "Error fetching technologies");
-                return StatusCode(500, new { message = "An error occurred while fetching technologies", error = ex.Message });
+                _logger?.LogError(ex, "Error creating technology");
+                return StatusCode(500, new { message = "An error occurred while creating technology", error = ex.Message });
             }
         }
     }
