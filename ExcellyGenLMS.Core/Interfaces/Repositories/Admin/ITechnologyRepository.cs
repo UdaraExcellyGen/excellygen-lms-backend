@@ -1,3 +1,5 @@
+// Path: ExcellyGenLMS.Core/Interfaces/Repositories/Admin/ITechnologyRepository.cs
+
 using ExcellyGenLMS.Core.Entities.Admin;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -12,5 +14,6 @@ namespace ExcellyGenLMS.Core.Interfaces.Repositories.Admin
         Task<Technology> UpdateTechnologyAsync(Technology technology);
         Task DeleteTechnologyAsync(string id);
         Task<Technology> ToggleTechnologyStatusAsync(string id);
+        Task<bool> IsTechnologyInUseAsync(string id);
     }
 }
