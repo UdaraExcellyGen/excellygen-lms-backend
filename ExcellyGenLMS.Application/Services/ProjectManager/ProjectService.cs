@@ -18,6 +18,7 @@ namespace ExcellyGenLMS.Application.Services.ProjectManager
         private readonly IRoleRepository _roleRepository;
         private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly ILogger<ProjectService>? _logger; // Mark logger as nullable
+        private Dictionary<string, string> _roleNameCache = new Dictionary<string, string>();
 
         public ProjectService(
             IProjectRepository projectRepository,
@@ -29,16 +30,53 @@ namespace ExcellyGenLMS.Application.Services.ProjectManager
             _roleRepository = roleRepository;
             _httpContextAccessor = httpContextAccessor;
             _logger = logger; // Can be null
+            
+            // Initialize the role name cache
+            InitializeRoleNameCacheAsync().Wait();
+        }
+        
+        // Method to initialize the role name cache
+        private async Task InitializeRoleNameCacheAsync()
+        {
+            try
+            {
+                var roles = await _roleRepository.GetAllAsync();
+                _roleNameCache = roles.ToDictionary(r => r.Id, r => r.Name);
+                _logger?.LogInformation($"Initialized role name cache with {_roleNameCache.Count} roles");
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Error initializing role name cache");
+                _roleNameCache = new Dictionary<string, string>();
+            }
+        }
+        
+        // Method to get role name from ID
+        private string GetRoleName(string roleId)
+        {
+            if (string.IsNullOrEmpty(roleId)) 
+                return "Unknown Role";
+                
+            if (_roleNameCache.TryGetValue(roleId, out string roleName))
+                return roleName;
+                
+            return $"Role {roleId}"; // Fallback if not found
         }
 
         public async Task<IEnumerable<ProjectDto>> GetProjectsAsync(string? status = null)
         {
+            // Refresh the role cache to ensure names are up to date
+            await RefreshRoleNameCacheIfNeededAsync();
+            
             var projects = await _projectRepository.GetAllAsync(status);
             return projects.Select(MapProjectToDto);
         }
 
         public async Task<ProjectDto?> GetProjectByIdAsync(string id)
         {
+            // Refresh the role cache to ensure names are up to date
+            await RefreshRoleNameCacheIfNeededAsync();
+            
             var project = await _projectRepository.GetByIdAsync(id);
             if (project == null)
             {
@@ -46,6 +84,15 @@ namespace ExcellyGenLMS.Application.Services.ProjectManager
             }
             
             return MapProjectToDto(project);
+        }
+        
+        // Method to refresh the role cache if it's empty
+        private async Task RefreshRoleNameCacheIfNeededAsync()
+        {
+            if (_roleNameCache.Count == 0)
+            {
+                await InitializeRoleNameCacheAsync();
+            }
         }
 
         public async Task<ProjectDto> CreateProjectAsync(CreateProjectDto createProjectDto)
@@ -164,11 +211,12 @@ namespace ExcellyGenLMS.Application.Services.ProjectManager
 
         private ProjectDto MapProjectToDto(PMProject project)
         {
+            // Use the role name cache to map role IDs to names
             var requiredRoles = project.RequiredRoles
                 .Select(r => new RequiredRoleDto
                 {
                     RoleId = r.Role,
-                    RoleName = r.Role, // This should ideally fetch the actual role name
+                    RoleName = GetRoleName(r.Role), // Now properly gets the role name
                     Count = r.Count
                 })
                 .ToList();

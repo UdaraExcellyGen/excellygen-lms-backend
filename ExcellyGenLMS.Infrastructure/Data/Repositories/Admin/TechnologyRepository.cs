@@ -1,3 +1,4 @@
+//ExcellyGenLMS.Infrastructure\Data\Repositories\Admin\TechnologyRepository.cs
 using ExcellyGenLMS.Core.Entities.Admin;
 using ExcellyGenLMS.Core.Interfaces.Repositories.Admin;
 using Microsoft.EntityFrameworkCore;
@@ -49,20 +50,28 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Admin
         {
             var technology = await _context.Technologies.FindAsync(id)
                 ?? throw new KeyNotFoundException($"Technology with ID {id} not found");
-
+            
             _context.Technologies.Remove(technology);
             await _context.SaveChangesAsync();
         }
 
+        public async Task<bool> IsTechnologyInUseAsync(string id)
+        {
+            // Check if the technology is used in any projects
+            return await _context.PMProjectTechnologies.AnyAsync(pt => pt.TechnologyId == id);
+        }
+
         public async Task<Technology> ToggleTechnologyStatusAsync(string id)
         {
-            var technology = await _context.Technologies.FindAsync(id)
-                ?? throw new KeyNotFoundException($"Technology with ID {id} not found");
+            var technology = await GetTechnologyByIdAsync(id);
+            if (technology == null)
+                throw new KeyNotFoundException($"Technology with ID {id} not found");
 
-            // Toggle status
+            // Toggle status between active and inactive
             technology.Status = technology.Status == "active" ? "inactive" : "active";
             technology.UpdatedAt = DateTime.UtcNow;
 
+            // Update and return
             await _context.SaveChangesAsync();
             return technology;
         }

@@ -80,9 +80,16 @@ namespace ExcellyGenLMS.Application.DTOs.ProjectManager
         public int Count { get; set; } = 1;
     }
 
+
+
+
     public class TechnologyDto
     {
         public string Id { get; set; } = string.Empty;
         public string Name { get; set; } = string.Empty;
+        public string Status { get; set; } = string.Empty;
+        public string CreatorId { get; set; } = string.Empty;   // Add this field
+        public string CreatorType { get; set; } = string.Empty; // Add this field
     }
+
 }

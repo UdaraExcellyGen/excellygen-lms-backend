@@ -25,7 +25,10 @@ namespace ExcellyGenLMS.Application.Services.ProjectManager
             return technologies.Select(t => new TechnologyDto
             {
                 Id = t.Id,
-                Name = t.Name
+                Name = t.Name,
+                Status = t.Status,
+                CreatorType = t.CreatorType ?? "admin", // Default to admin if null
+                CreatorId = t.CreatorId ?? "system"     // Default to system if null
             }).ToList();
         }
     }
