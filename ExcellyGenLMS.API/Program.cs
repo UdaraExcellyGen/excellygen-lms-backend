@@ -59,7 +59,6 @@ builder.Services.AddCors(options =>
                 )
                 .AllowAnyMethod()
                 .AllowAnyHeader()
-                .WithExposedHeaders("X-Active-Role") // Add this line to expose the custom header
                 .AllowCredentials();
         });
 });
