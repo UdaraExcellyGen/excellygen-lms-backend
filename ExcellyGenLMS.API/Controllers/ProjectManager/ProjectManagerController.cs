@@ -17,18 +17,18 @@ namespace ExcellyGenLMS.API.Controllers.ProjectManager
         private readonly IProjectService _projectService;
         private readonly IRoleService _roleService;
         private readonly IPMTechnologyService _pmTechnologyService;
-        private readonly ILogger<ProjectManagerController> _logger;
+        private readonly ILogger<ProjectManagerController>? _logger; // Mark as nullable
 
         public ProjectManagerController(
             IProjectService projectService,
             IRoleService roleService,
             IPMTechnologyService pmTechnologyService,
-            ILogger<ProjectManagerController> logger = null)
+            ILogger<ProjectManagerController>? logger = null) // Mark parameter as nullable
         {
             _projectService = projectService;
             _roleService = roleService;
             _pmTechnologyService = pmTechnologyService;
-            _logger = logger;
+            _logger = logger; // This will no longer cause a warning
         }
 
         // ----- Project Endpoints -----
@@ -75,7 +75,7 @@ namespace ExcellyGenLMS.API.Controllers.ProjectManager
             {
                 // Log the received data
                 _logger?.LogInformation($"Creating project: {createProjectDto.Name}");
-                
+
                 // Check for required data
                 if (string.IsNullOrEmpty(createProjectDto.Name))
                 {
@@ -84,7 +84,7 @@ namespace ExcellyGenLMS.API.Controllers.ProjectManager
 
                 var project = await _projectService.CreateProjectAsync(createProjectDto);
                 _logger?.LogInformation($"Project created successfully with ID: {project.Id}");
-                
+
                 return CreatedAtAction(nameof(GetProject), new { id = project.Id }, project);
             }
             catch (Exception ex)

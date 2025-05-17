@@ -1,20 +1,37 @@
-// Enrollment.cs
+// ExcellyGenLMS.Core/Entities/Course/Enrollment.cs
+using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using ExcellyGenLMS.Core.Entities.Auth;
 
-namespace ExcellyGenLMS.Core.Entities.Course // Corrected Namespace
+namespace ExcellyGenLMS.Core.Entities.Course
 {
-    [Table("Enrollments")] // Corrected Table name to "Enrollments" (plural convention)
+    [Table("Enrollments")]
     public class Enrollment
     {
-        [Key] // Primary Key attribute
-        [Column("enrollment_id")] // Explicitly name the column
-        public int Id { get; set; } // Changed property name to Id for convention
+        [Key]
+        [Column("enrollment_id")]
+        public int Id { get; set; }
 
-        [Column("enrollment_time")] // Explicitly name the column
-        public TimeSpan Time { get; set; } // Use TimeSpan for time
+        [Required]
+        [Column("user_id")]
+        public required string UserId { get; set; }
 
-        [Column("enrollment_date")] // Explicitly name the column
-        public DateTime Date { get; set; } // Use DateTime for date
+        [Required]
+        [Column("course_id")]
+        public int CourseId { get; set; }
+
+        [Column("enrollment_date")]
+        public DateTime EnrollmentDate { get; set; } = DateTime.UtcNow;
+
+        [Column("status")]
+        public string Status { get; set; } = "active"; // active, completed, withdrawn
+
+        // Navigation properties
+        [ForeignKey("UserId")]
+        public virtual User? User { get; set; }
+
+        [ForeignKey("CourseId")]
+        public virtual Course? Course { get; set; }
     }
 }
