@@ -41,7 +41,7 @@ namespace ExcellyGenLMS.Application.Services.Admin
         }
 
         // Helper method to map entity to DTO
-        private static CourseDto MapToDto(Course course)
+        private static CourseDto MapToDto(ExcellyGenLMS.Core.Entities.Course.Course course)
         {
             return new CourseDto
             {
