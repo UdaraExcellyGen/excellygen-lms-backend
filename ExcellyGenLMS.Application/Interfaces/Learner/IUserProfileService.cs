@@ -10,5 +10,7 @@ namespace ExcellyGenLMS.Application.Interfaces.Learner
         Task<UserProfileDto> UpdateUserProfileAsync(string userId, UpdateUserProfileDto updateDto);
         Task<string> UploadUserAvatarAsync(string userId, IFormFile avatar);
         Task DeleteUserAvatarAsync(string userId);
+
+        Task<string> UpdateAvatarUrlAsync(string userId, string avatarUrl);
     }
 }

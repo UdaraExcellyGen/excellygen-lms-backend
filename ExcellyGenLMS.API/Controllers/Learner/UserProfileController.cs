@@ -71,6 +71,7 @@ namespace ExcellyGenLMS.API.Controllers.Learner
             }
         }
 
+        // Original method for direct file upload
         [HttpPost("{userId}/avatar")]
         public async Task<ActionResult<object>> UploadUserAvatar(string userId, IFormFile file)
         {
@@ -110,6 +111,58 @@ namespace ExcellyGenLMS.API.Controllers.Learner
             }
         }
 
+        // Combined method for updating avatar URL
+        [HttpPost("{userId}/avatar-url")]
+        public async Task<ActionResult<object>> UpdateAvatarUrl(
+            string userId,
+            [FromBody] AvatarUrlDto avatarUrlDto)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(avatarUrlDto.AvatarUrl))
+                {
+                    return BadRequest(new { error = "Avatar URL is required." });
+                }
+
+                _logger.LogInformation("Updating avatar URL for user {UserId}", userId);
+
+                // Use the dedicated method if it exists
+                string avatarUrl;
+                try
+                {
+                    avatarUrl = await _userProfileService.UpdateAvatarUrlAsync(userId, avatarUrlDto.AvatarUrl);
+                }
+                catch (NotImplementedException)
+                {
+                    // Fallback to the older implementation if the new method isn't available
+                    var user = await _userProfileService.GetUserProfileAsync(userId);
+                    user.Avatar = avatarUrlDto.AvatarUrl;
+
+                    var updatedProfile = await _userProfileService.UpdateUserProfileAsync(
+                        userId,
+                        new UpdateUserProfileDto
+                        {
+                            JobRole = user.JobRole,
+                            About = user.About
+                        });
+
+                    avatarUrl = avatarUrlDto.AvatarUrl;
+                }
+
+                return Ok(new { avatar = avatarUrl });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                _logger.LogWarning(ex, "User not found: {UserId}", userId);
+                return NotFound(new { error = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating avatar URL: {UserId}", userId);
+                return StatusCode(500, new { error = "Failed to update avatar URL." });
+            }
+        }
+
         [HttpDelete("{userId}/avatar")]
         public async Task<ActionResult> DeleteUserAvatar(string userId)
         {
@@ -130,5 +183,13 @@ namespace ExcellyGenLMS.API.Controllers.Learner
                 return StatusCode(500, new { error = "Failed to delete avatar." });
             }
         }
+    }
+
+    /// <summary>
+    /// Data transfer object for avatar URL updates
+    /// </summary>
+    public class AvatarUrlDto
+    {
+        public string AvatarUrl { get; set; } = string.Empty;
     }
 }

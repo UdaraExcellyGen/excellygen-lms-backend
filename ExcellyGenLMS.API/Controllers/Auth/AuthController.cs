@@ -85,7 +85,8 @@ namespace ExcellyGenLMS.API.Controllers.Auth
                         Email = user.Email,
                         Roles = user.Roles ?? new List<string>(),
                         Token = tokenDto,
-                        RequirePasswordChange = user.RequirePasswordChange
+                        RequirePasswordChange = user.RequirePasswordChange,
+                        Avatar = user.Avatar
                     };
 
                     _logger.LogInformation($"Login successful for user: {user.Id}");

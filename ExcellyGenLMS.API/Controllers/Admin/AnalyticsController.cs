@@ -1,4 +1,3 @@
-// ExcellyGenLMS.API/Controllers/Admin/AnalyticsController.cs
 using System;
 using System.Threading.Tasks;
 using ExcellyGenLMS.Application.DTOs.Admin;
@@ -26,7 +25,7 @@ namespace ExcellyGenLMS.API.Controllers.Admin
         }
 
         [HttpGet("dashboard")]
-        public async Task<ActionResult<DashboardAnalyticsDto>> GetDashboardAnalytics([FromQuery] string categoryId = null)
+        public async Task<ActionResult<DashboardAnalyticsDto>> GetDashboardAnalytics([FromQuery] string? categoryId = null)
         {
             try
             {
@@ -42,7 +41,7 @@ namespace ExcellyGenLMS.API.Controllers.Admin
         }
 
         [HttpGet("enrollment")]
-        public async Task<ActionResult<EnrollmentAnalyticsDto>> GetEnrollmentAnalytics([FromQuery] string categoryId = null)
+        public async Task<ActionResult<EnrollmentAnalyticsDto>> GetEnrollmentAnalytics([FromQuery] string? categoryId = null)
         {
             try
             {

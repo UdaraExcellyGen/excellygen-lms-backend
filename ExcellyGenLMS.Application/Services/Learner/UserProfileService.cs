@@ -37,6 +37,25 @@ namespace ExcellyGenLMS.Application.Services.Learner
             return MapUserToProfileDto(user);
         }
 
+        public async Task<string> UpdateAvatarUrlAsync(string userId, string avatarUrl)
+        {
+            _logger.LogInformation("Updating avatar URL for user {UserId}", userId);
+
+            var user = await _userRepository.GetUserByIdAsync(userId)
+                ?? throw new KeyNotFoundException($"User with ID {userId} not found");
+
+            // Store previous avatar URL in case cleanup is needed
+            string? previousAvatarUrl = user.Avatar;
+
+            // Update user avatar URL with Firebase Storage URL
+            user.Avatar = avatarUrl;
+            await _userRepository.UpdateUserAsync(user);
+
+            _logger.LogInformation("Avatar URL updated for user {UserId}", userId);
+
+            return avatarUrl;
+        }
+
         public async Task<UserProfileDto> UpdateUserProfileAsync(string userId, UpdateUserProfileDto updateDto)
         {
             _logger.LogInformation("Updating profile for user {UserId}", userId);

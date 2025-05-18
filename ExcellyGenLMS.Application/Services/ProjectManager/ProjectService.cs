@@ -30,11 +30,11 @@ namespace ExcellyGenLMS.Application.Services.ProjectManager
             _roleRepository = roleRepository;
             _httpContextAccessor = httpContextAccessor;
             _logger = logger; // Can be null
-            
+
             // Initialize the role name cache
             InitializeRoleNameCacheAsync().Wait();
         }
-        
+
         // Method to initialize the role name cache
         private async Task InitializeRoleNameCacheAsync()
         {
@@ -50,16 +50,16 @@ namespace ExcellyGenLMS.Application.Services.ProjectManager
                 _roleNameCache = new Dictionary<string, string>();
             }
         }
-        
+
         // Method to get role name from ID
         private string GetRoleName(string roleId)
         {
-            if (string.IsNullOrEmpty(roleId)) 
+            if (string.IsNullOrEmpty(roleId))
                 return "Unknown Role";
-                
+
             if (_roleNameCache.TryGetValue(roleId, out string roleName))
                 return roleName;
-                
+
             return $"Role {roleId}"; // Fallback if not found
         }
 
@@ -67,7 +67,7 @@ namespace ExcellyGenLMS.Application.Services.ProjectManager
         {
             // Refresh the role cache to ensure names are up to date
             await RefreshRoleNameCacheIfNeededAsync();
-            
+
             var projects = await _projectRepository.GetAllAsync(status);
             return projects.Select(MapProjectToDto);
         }
@@ -76,16 +76,17 @@ namespace ExcellyGenLMS.Application.Services.ProjectManager
         {
             // Refresh the role cache to ensure names are up to date
             await RefreshRoleNameCacheIfNeededAsync();
-            
-            var project = await _projectRepository.GetByIdAsync(id);
+
+            // Fixed: Explicitly use PMProject? to indicate nullable type
+            PMProject? project = await _projectRepository.GetByIdAsync(id);
             if (project == null)
             {
                 return null;
             }
-            
+
             return MapProjectToDto(project);
         }
-        
+
         // Method to refresh the role cache if it's empty
         private async Task RefreshRoleNameCacheIfNeededAsync()
         {
@@ -144,12 +145,13 @@ namespace ExcellyGenLMS.Application.Services.ProjectManager
                 }
 
                 // Reload the project with all relationships
-                var updatedProject = await _projectRepository.GetByIdAsync(createdProject.Id);
+                // Fixed: Explicitly use PMProject? to indicate nullable type
+                PMProject? updatedProject = await _projectRepository.GetByIdAsync(createdProject.Id);
                 if (updatedProject == null)
                 {
                     throw new InvalidOperationException("Created project could not be retrieved");
                 }
-                
+
                 return MapProjectToDto(updatedProject);
             }
             catch (Exception ex)
@@ -161,7 +163,8 @@ namespace ExcellyGenLMS.Application.Services.ProjectManager
 
         public async Task<ProjectDto?> UpdateProjectAsync(string id, UpdateProjectDto updateProjectDto)
         {
-            var project = await _projectRepository.GetByIdAsync(id);
+            // Fixed: Explicitly use PMProject? to indicate nullable type
+            PMProject? project = await _projectRepository.GetByIdAsync(id);
             if (project == null)
             {
                 return null;
@@ -172,7 +175,7 @@ namespace ExcellyGenLMS.Application.Services.ProjectManager
             project.ShortDescription = updateProjectDto.ShortDescription ?? string.Empty;
             project.Status = updateProjectDto.Status;
             // StartDate is non-nullable DateTime - use directly
-            project.StartDate = updateProjectDto.StartDate;  
+            project.StartDate = updateProjectDto.StartDate;
             project.Deadline = updateProjectDto.Deadline;    // Deadline is already nullable
             project.Progress = updateProjectDto.Progress;
             project.UpdatedAt = DateTime.UtcNow;
@@ -195,12 +198,13 @@ namespace ExcellyGenLMS.Application.Services.ProjectManager
             await _projectRepository.UpdateRequiredRolesAsync(updatedProject.Id, requiredRoles);
 
             // Reload the project with all relationships
-            var refreshedProject = await _projectRepository.GetByIdAsync(updatedProject.Id);
+            // Fixed: Explicitly use PMProject? to indicate nullable type
+            PMProject? refreshedProject = await _projectRepository.GetByIdAsync(updatedProject.Id);
             if (refreshedProject == null)
             {
                 throw new InvalidOperationException("Updated project could not be retrieved");
             }
-            
+
             return MapProjectToDto(refreshedProject);
         }
 
@@ -235,7 +239,7 @@ namespace ExcellyGenLMS.Application.Services.ProjectManager
                 UpdatedAt = project.UpdatedAt,
                 CreatorId = project.CreatorId,
                 CreatorName = project.Creator?.Name ?? "Unknown",
-                
+
                 RequiredSkills = project.Technologies
                     .Select(t => new TechnologyDto
                     {
@@ -243,7 +247,7 @@ namespace ExcellyGenLMS.Application.Services.ProjectManager
                         Name = t.Technology?.Name ?? "Unknown"
                     })
                     .ToList(),
-                
+
                 RequiredRoles = requiredRoles
             };
         }
