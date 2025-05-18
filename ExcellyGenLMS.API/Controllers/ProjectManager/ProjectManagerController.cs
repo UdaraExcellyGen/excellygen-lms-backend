@@ -1,3 +1,6 @@
+//ExcellyGenLMS.API\Controllers\ProjectManager\ProjectManagerController.cs
+
+
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -6,6 +9,9 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using ExcellyGenLMS.Application.DTOs.ProjectManager;
 using ExcellyGenLMS.Application.Interfaces.ProjectManager;
+using ExcellyGenLMS.Application.Interfaces.Admin;
+using AdminDto = ExcellyGenLMS.Application.DTOs.Admin;
+using PMDto = ExcellyGenLMS.Application.DTOs.ProjectManager;
 
 namespace ExcellyGenLMS.API.Controllers.ProjectManager
 {
@@ -17,22 +23,25 @@ namespace ExcellyGenLMS.API.Controllers.ProjectManager
         private readonly IProjectService _projectService;
         private readonly IRoleService _roleService;
         private readonly IPMTechnologyService _pmTechnologyService;
+        private readonly ITechnologyService _technologyService;
         private readonly ILogger<ProjectManagerController>? _logger; // Mark as nullable
 
         public ProjectManagerController(
             IProjectService projectService,
             IRoleService roleService,
             IPMTechnologyService pmTechnologyService,
+            ITechnologyService technologyService,
             ILogger<ProjectManagerController>? logger = null) // Mark parameter as nullable
         {
             _projectService = projectService;
             _roleService = roleService;
             _pmTechnologyService = pmTechnologyService;
+            _technologyService = technologyService;
             _logger = logger; // This will no longer cause a warning
         }
 
         // ----- Project Endpoints -----
-
+        
         [HttpGet("projects")]
         public async Task<ActionResult<IEnumerable<ProjectDto>>> GetProjects([FromQuery] string? status = null)
         {
@@ -229,7 +238,7 @@ namespace ExcellyGenLMS.API.Controllers.ProjectManager
         // ----- Technology Endpoints -----
 
         [HttpGet("technologies")]
-        public async Task<ActionResult<IEnumerable<TechnologyDto>>> GetTechnologies()
+        public async Task<ActionResult<IEnumerable<PMDto.TechnologyDto>>> GetTechnologies()
         {
             try
             {
@@ -240,6 +249,102 @@ namespace ExcellyGenLMS.API.Controllers.ProjectManager
             {
                 _logger?.LogError(ex, "Error fetching technologies");
                 return StatusCode(500, new { message = "An error occurred while fetching technologies", error = ex.Message });
+            }
+        }
+        
+        // New technology creation endpoint that properly sets creatorType
+        [HttpPost("technologies")]
+        public async Task<ActionResult<AdminDto.TechnologyDto>> CreateTechnology([FromBody] AdminDto.CreateTechnologyDto createTechnologyDto)
+        {
+            try
+            {
+                _logger?.LogInformation($"Creating technology: {createTechnologyDto.Name}");
+                
+                // Check for required data
+                if (string.IsNullOrEmpty(createTechnologyDto.Name))
+                {
+                    return BadRequest(new { message = "Technology name is required" });
+                }
+
+                // Get user ID from claim for creator information
+                var userId = User.FindFirst("uid")?.Value ?? "system";
+                
+                // Force creatorType to "project_manager" when using this endpoint
+                var technology = await _technologyService.CreateTechnologyAsync(
+                    createTechnologyDto, 
+                    userId, 
+                    "project_manager"  // <-- This ensures PM role is set as creator type
+                );
+                
+                _logger?.LogInformation($"Technology created successfully with ID: {technology.Id}");
+                
+                return Ok(technology);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, $"Error creating technology: {ex.Message}");
+                return StatusCode(500, new { message = "An error occurred while creating the technology", error = ex.Message });
+            }
+        }
+        
+        // Add technology update endpoint 
+        [HttpPut("technologies/{id}")]
+        public async Task<ActionResult<AdminDto.TechnologyDto>> UpdateTechnology(string id, [FromBody] AdminDto.UpdateTechnologyDto updateTechnologyDto)
+        {
+            try
+            {
+                _logger?.LogInformation($"Updating technology: {id}");
+                
+                // Flag indicating we're using the project manager role
+                bool isAdmin = false;
+                
+                var technology = await _technologyService.UpdateTechnologyAsync(id, updateTechnologyDto, isAdmin);
+                if (technology == null)
+                {
+                    return NotFound($"Technology with ID {id} not found");
+                }
+
+                return Ok(technology);
+            }
+            catch (InvalidOperationException ex) when (ex.Message.Contains("cannot be modified"))
+            {
+                _logger?.LogWarning(ex, $"Permission error updating technology {id}");
+                return StatusCode(403, new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, $"Error updating technology {id}");
+                return StatusCode(500, new { message = $"An error occurred while updating technology {id}", error = ex.Message });
+            }
+        }
+        
+        // Add technology deletion endpoint
+        [HttpDelete("technologies/{id}")]
+        public async Task<ActionResult> DeleteTechnology(string id)
+        {
+            try
+            {
+                _logger?.LogInformation($"Deleting technology: {id}");
+                
+                // Flag indicating we're using the project manager role
+                bool isAdmin = false;
+                
+                await _technologyService.DeleteTechnologyAsync(id, isAdmin);
+                return NoContent();
+            }
+            catch (InvalidOperationException ex) when (ex.Message.Contains("cannot be deleted") || ex.Message.Contains("in use"))
+            {
+                _logger?.LogWarning(ex, $"Permission error deleting technology {id}");
+                return StatusCode(403, new { message = ex.Message });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, $"Error deleting technology {id}");
+                return StatusCode(500, new { message = $"An error occurred while deleting technology {id}", error = ex.Message });
             }
         }
     }
