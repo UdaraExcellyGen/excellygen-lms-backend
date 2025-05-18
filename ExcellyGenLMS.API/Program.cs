@@ -39,11 +39,23 @@ using ExcellyGenLMS.Application.Services.Learner;
 using ExcellyGenLMS.Infrastructure.Data.Repositories.ProjectManager;
 using ExcellyGenLMS.Application.Services.ProjectManager;
 
+// Added for Analytics functionality
+using System.Data;
+using Microsoft.Data.SqlClient;
+using ExcellyGenLMS.Core.Interfaces.Repositories.Course;
+using ExcellyGenLMS.Infrastructure.Data.Repositories.Course;
+using ExcellyGenLMS.Application.Interfaces.Course;
+using ExcellyGenLMS.Application.Services.Course;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // --- Add DbContext configuration ---
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+// --- Add IDbConnection for Dapper ---
+builder.Services.AddTransient<IDbConnection>(sp =>
+    new SqlConnection(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 // --- Add CORS ---
 builder.Services.AddCors(options =>
@@ -163,6 +175,9 @@ builder.Services.AddScoped<IForumThreadRepository, ForumThreadRepository>();
 builder.Services.AddScoped<IThreadCommentRepository, ThreadCommentRepository>();
 builder.Services.AddScoped<IThreadComReplyRepository, ThreadComReplyRepository>();
 
+// Course repositories
+builder.Services.AddScoped<IEnrollmentRepository, EnrollmentRepository>();
+
 // ProjectManager repositories
 builder.Services.AddScoped<IProjectRepository, ProjectRepository>();
 builder.Services.AddScoped<IRoleRepository, RoleRepository>();
@@ -182,6 +197,12 @@ builder.Services.AddScoped<ICourseCategoryService, CourseCategoryService>();
 builder.Services.AddScoped<ICourseAdminService, CourseAdminService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
 
+// Add Analytics Service
+builder.Services.AddScoped<IAnalyticsService, AnalyticsService>();
+
+// Course services
+builder.Services.AddScoped<IEnrollmentService, EnrollmentService>();
+
 // Learner services
 builder.Services.AddScoped<IUserBadgeService, UserBadgeService>();
 builder.Services.AddScoped<IUserTechnologyService, UserTechnologyService>();
@@ -190,7 +211,6 @@ builder.Services.AddScoped<IUserCertificationService, UserCertificationService>(
 builder.Services.AddScoped<IUserProfileService, UserProfileService>();
 builder.Services.AddScoped<IForumService, ForumService>();
 builder.Services.AddScoped<IFileService, FileService>();
-
 
 // ProjectManager services
 builder.Services.AddScoped<ExcellyGenLMS.Application.Interfaces.ProjectManager.IProjectService, ExcellyGenLMS.Application.Services.ProjectManager.ProjectService>();

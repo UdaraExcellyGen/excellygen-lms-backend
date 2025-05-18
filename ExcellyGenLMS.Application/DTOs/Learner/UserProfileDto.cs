@@ -14,11 +14,18 @@ namespace ExcellyGenLMS.Application.DTOs.Learner
         public string About { get; set; } = string.Empty;
         public string? Avatar { get; set; }
         public List<string> Roles { get; set; } = new List<string>();
+
+        public string? AvatarUrl { get; set; }
     }
 
     public class UpdateUserProfileDto
     {
         public string? JobRole { get; set; }
         public string? About { get; set; }
+    }
+
+    public class AvatarUrlUpdateDto
+    {
+        public string AvatarUrl { get; set; }
     }
 }
