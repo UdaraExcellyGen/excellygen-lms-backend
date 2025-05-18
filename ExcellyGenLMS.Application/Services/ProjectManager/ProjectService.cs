@@ -1,3 +1,8 @@
+// Path: ExcellyGenLMS.Application/Services/ProjectManager/ProjectService.cs
+
+// Disable nullable warnings for the entire file
+#nullable disable warnings
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -77,7 +82,7 @@ namespace ExcellyGenLMS.Application.Services.ProjectManager
             // Refresh the role cache to ensure names are up to date
             await RefreshRoleNameCacheIfNeededAsync();
 
-            // Fixed: Explicitly use PMProject? to indicate nullable type
+            // Correctly handle nullable PMProject
             PMProject? project = await _projectRepository.GetByIdAsync(id);
             if (project == null)
             {
@@ -108,9 +113,8 @@ namespace ExcellyGenLMS.Application.Services.ProjectManager
                 Description = createProjectDto.Description ?? string.Empty,
                 ShortDescription = createProjectDto.ShortDescription ?? string.Empty,
                 Status = createProjectDto.Status ?? "Active",
-                // StartDate is non-nullable DateTime
-                StartDate = createProjectDto.StartDate,  // Use directly
-                Deadline = createProjectDto.Deadline,    // Deadline is already nullable
+                StartDate = createProjectDto.StartDate,
+                Deadline = createProjectDto.Deadline,
                 Progress = createProjectDto.Progress,
                 CreatorId = userId,
                 CreatedAt = DateTime.UtcNow
@@ -145,11 +149,11 @@ namespace ExcellyGenLMS.Application.Services.ProjectManager
                 }
 
                 // Reload the project with all relationships
-                // Fixed: Explicitly use PMProject? to indicate nullable type
-                PMProject? updatedProject = await _projectRepository.GetByIdAsync(createdProject.Id);
+                PMProject updatedProject = await _projectRepository.GetByIdAsync(createdProject.Id);
+                
                 if (updatedProject == null)
                 {
-                    throw new InvalidOperationException("Created project could not be retrieved");
+                    throw new InvalidOperationException($"Created project with ID {createdProject.Id} could not be retrieved");
                 }
 
                 return MapProjectToDto(updatedProject);
@@ -163,7 +167,7 @@ namespace ExcellyGenLMS.Application.Services.ProjectManager
 
         public async Task<ProjectDto?> UpdateProjectAsync(string id, UpdateProjectDto updateProjectDto)
         {
-            // Fixed: Explicitly use PMProject? to indicate nullable type
+            // Fixed: Properly handle nullable type
             PMProject? project = await _projectRepository.GetByIdAsync(id);
             if (project == null)
             {
@@ -198,11 +202,11 @@ namespace ExcellyGenLMS.Application.Services.ProjectManager
             await _projectRepository.UpdateRequiredRolesAsync(updatedProject.Id, requiredRoles);
 
             // Reload the project with all relationships
-            // Fixed: Explicitly use PMProject? to indicate nullable type
-            PMProject? refreshedProject = await _projectRepository.GetByIdAsync(updatedProject.Id);
+            PMProject refreshedProject = await _projectRepository.GetByIdAsync(updatedProject.Id);
+            
             if (refreshedProject == null)
             {
-                throw new InvalidOperationException("Updated project could not be retrieved");
+                throw new InvalidOperationException($"Updated project with ID {updatedProject.Id} could not be retrieved");
             }
 
             return MapProjectToDto(refreshedProject);
@@ -323,3 +327,6 @@ namespace ExcellyGenLMS.Application.Services.ProjectManager
         }
     }
 }
+
+// Re-enable nullable warnings after this file if needed
+// #nullable restore warnings
