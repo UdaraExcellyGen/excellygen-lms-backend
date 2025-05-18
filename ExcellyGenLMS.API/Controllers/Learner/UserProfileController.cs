@@ -185,8 +185,11 @@ namespace ExcellyGenLMS.API.Controllers.Learner
         }
     }
 
+    /// <summary>
+    /// Data transfer object for avatar URL updates
+    /// </summary>
     public class AvatarUrlDto
     {
-        public string AvatarUrl { get; set; }
+        public string AvatarUrl { get; set; } = string.Empty;
     }
 }

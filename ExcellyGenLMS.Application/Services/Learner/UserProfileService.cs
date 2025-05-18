@@ -45,7 +45,7 @@ namespace ExcellyGenLMS.Application.Services.Learner
                 ?? throw new KeyNotFoundException($"User with ID {userId} not found");
 
             // Store previous avatar URL in case cleanup is needed
-            string previousAvatarUrl = user.Avatar;
+            string? previousAvatarUrl = user.Avatar;
 
             // Update user avatar URL with Firebase Storage URL
             user.Avatar = avatarUrl;
