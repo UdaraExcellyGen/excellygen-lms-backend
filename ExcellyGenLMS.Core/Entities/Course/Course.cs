@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using ExcellyGenLMS.Core.Entities.Admin;
 using ExcellyGenLMS.Core.Entities.Auth;
+using ExcellyGenLMS.Core.Enums; // Ensure this using is present
 
 namespace ExcellyGenLMS.Core.Entities.Course
 {
@@ -9,7 +10,7 @@ namespace ExcellyGenLMS.Core.Entities.Course
     public class Course
     {
         [Key]
-        public int Id { get; set; }
+        public int Id { get; set; } // Keep int as it's likely auto-incrementing PK
 
         [Required]
         [MaxLength(200)]
@@ -17,11 +18,11 @@ namespace ExcellyGenLMS.Core.Entities.Course
 
         public string? Description { get; set; }
 
-        [Required]
-        public int CoursePoints { get; set; }
+        // CoursePoints will be calculated from Lessons, nullable allows calculation before publish
+        public int? CoursePoints { get; set; }
 
-        [Required]
-        public int EstimatedTime { get; set; }
+        [Required] // Estimated time is required in step 1
+        public int EstimatedTime { get; set; } // In Hours
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
@@ -29,8 +30,8 @@ namespace ExcellyGenLMS.Core.Entities.Course
 
         public CourseStatus Status { get; set; } = CourseStatus.Draft;
 
-        [MaxLength]
-        public string? ThumbnailImage { get; set; }
+        [MaxLength(1024)] // Store URL/path, Increased length
+        public string? ThumbnailImagePath { get; set; } // Renamed
 
         // Foreign key for the category
         [Required]
@@ -39,19 +40,17 @@ namespace ExcellyGenLMS.Core.Entities.Course
         [ForeignKey("CategoryId")]
         public virtual CourseCategory Category { get; set; } = null!;
 
-        // Foreign key for the creator
+        // Foreign key for the creator (assuming User Id is string)
         [Required]
         public string CreatorId { get; set; } = string.Empty;
 
         [ForeignKey("CreatorId")]
         public virtual User Creator { get; set; } = null!;
 
-        public virtual ICollection<Lesson>? Lessons { get; set; }
-    }
+        // Navigation property for Lessons
+        public virtual ICollection<Lesson> Lessons { get; set; } = new List<Lesson>();
 
-    public enum CourseStatus
-    {
-        Draft,
-        Published
+        // Navigation property for Technologies (Many-to-Many via join table)
+        public virtual ICollection<CourseTechnology> CourseTechnologies { get; set; } = new List<CourseTechnology>();
     }
 }

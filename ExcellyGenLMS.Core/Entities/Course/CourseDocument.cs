@@ -1,16 +1,9 @@
-// CourseDocument.cs
-using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using ExcellyGenLMS.Core.Enums; // Ensure this using is present
 
 namespace ExcellyGenLMS.Core.Entities.Course
 {
-    public enum DocumentType
-    {
-        PDF,
-        Word
-    }
-
     [Table("CourseDocuments")]
     public class CourseDocument
     {
@@ -18,7 +11,7 @@ namespace ExcellyGenLMS.Core.Entities.Course
         public int Id { get; set; }
 
         [Required]
-        [MaxLength(200)]
+        [MaxLength(255)] // Increased practical length
         public required string Name { get; set; }
 
         [Required]
@@ -27,16 +20,15 @@ namespace ExcellyGenLMS.Core.Entities.Course
         public DateTime LastUpdatedDate { get; set; } = DateTime.UtcNow;
 
         [Required]
-        [MaxLength(2048)]
-        public required string FilePath { get; set; }
+        [MaxLength(1024)] // Increased length for paths/URLs
+        public required string FilePath { get; set; } // Store relative path or URL
 
-        public long FileSize { get; set; }
-        
-        // Foreign key for Lesson
+        public long FileSize { get; set; } // In bytes
+
+        [Required]
         public int LessonId { get; set; }
-        
-        // Navigation property to Lesson
+
         [ForeignKey("LessonId")]
-        public Lesson Lesson { get; set; } = null!;
+        public virtual Lesson Lesson { get; set; } = null!; // Ensure non-nullable relationship
     }
 }
