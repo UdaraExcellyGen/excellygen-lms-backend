@@ -71,7 +71,6 @@ namespace ExcellyGenLMS.API.Controllers.Learner
             }
         }
 
-        // Original method for direct file upload
         [HttpPost("{userId}/avatar")]
         public async Task<ActionResult<object>> UploadUserAvatar(string userId, IFormFile file)
         {
@@ -89,14 +88,17 @@ namespace ExcellyGenLMS.API.Controllers.Learner
                 }
 
                 // Check file type
-                var allowedTypes = new[] { "image/jpeg", "image/png", "image/gif" };
+                var allowedTypes = new[] { "image/jpeg", "image/png", "image/gif", "image/jpg" };
                 if (!allowedTypes.Contains(file.ContentType.ToLower()))
                 {
                     return BadRequest(new { error = "File type not allowed. Only JPEG, PNG, and GIF files are accepted." });
                 }
 
                 _logger.LogInformation("Uploading avatar for user {UserId}", userId);
+
+                // Use the existing service method which now supports Firebase
                 var avatarUrl = await _userProfileService.UploadUserAvatarAsync(userId, file);
+
                 return Ok(new { avatar = avatarUrl });
             }
             catch (KeyNotFoundException ex)
@@ -111,7 +113,6 @@ namespace ExcellyGenLMS.API.Controllers.Learner
             }
         }
 
-        // Combined method for updating avatar URL
         [HttpPost("{userId}/avatar-url")]
         public async Task<ActionResult<object>> UpdateAvatarUrl(
             string userId,
@@ -125,30 +126,7 @@ namespace ExcellyGenLMS.API.Controllers.Learner
                 }
 
                 _logger.LogInformation("Updating avatar URL for user {UserId}", userId);
-
-                // Use the dedicated method if it exists
-                string avatarUrl;
-                try
-                {
-                    avatarUrl = await _userProfileService.UpdateAvatarUrlAsync(userId, avatarUrlDto.AvatarUrl);
-                }
-                catch (NotImplementedException)
-                {
-                    // Fallback to the older implementation if the new method isn't available
-                    var user = await _userProfileService.GetUserProfileAsync(userId);
-                    user.Avatar = avatarUrlDto.AvatarUrl;
-
-                    var updatedProfile = await _userProfileService.UpdateUserProfileAsync(
-                        userId,
-                        new UpdateUserProfileDto
-                        {
-                            JobRole = user.JobRole,
-                            About = user.About
-                        });
-
-                    avatarUrl = avatarUrlDto.AvatarUrl;
-                }
-
+                var avatarUrl = await _userProfileService.UpdateAvatarUrlAsync(userId, avatarUrlDto.AvatarUrl);
                 return Ok(new { avatar = avatarUrl });
             }
             catch (KeyNotFoundException ex)
@@ -164,13 +142,20 @@ namespace ExcellyGenLMS.API.Controllers.Learner
         }
 
         [HttpDelete("{userId}/avatar")]
-        public async Task<ActionResult> DeleteUserAvatar(string userId)
+        public async Task<ActionResult<object>> DeleteUserAvatar(string userId)
         {
             try
             {
                 _logger.LogInformation("Deleting avatar for user {UserId}", userId);
+
+                // Get current profile to return previous avatar URL
+                var currentProfile = await _userProfileService.GetUserProfileAsync(userId);
+                var previousAvatarUrl = currentProfile.Avatar;
+
+                // Delete the avatar
                 await _userProfileService.DeleteUserAvatarAsync(userId);
-                return NoContent();
+
+                return Ok(new { previousAvatarUrl = previousAvatarUrl });
             }
             catch (KeyNotFoundException ex)
             {

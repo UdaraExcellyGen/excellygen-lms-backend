@@ -75,7 +75,7 @@ builder.Services.AddCors(options =>
         });
 });
 
-// --- Initialize Firebase Admin ---
+// --- Enhanced Firebase Admin Configuration ---
 if (FirebaseApp.DefaultInstance == null)
 {
     try
@@ -97,12 +97,18 @@ if (FirebaseApp.DefaultInstance == null)
             throw new FileNotFoundException($"Firebase service account file not found at the resolved path: {serviceAccountKeyPath}. Ensure the file exists or the 'Firebase:ServiceAccountKeyPath' in appsettings.json is correct.");
         }
 
+        // Initialize Firebase Admin with enhanced configuration
         FirebaseApp.Create(new AppOptions
         {
-            Credential = GoogleCredential.FromFile(serviceAccountKeyPath)
+            Credential = GoogleCredential.FromFile(serviceAccountKeyPath),
+            ProjectId = builder.Configuration["Firebase:ProjectId"] ?? "excelly-lms-f3500"
         });
 
         Console.WriteLine("Firebase Admin SDK initialized successfully.");
+
+        // Set up default application credentials for Google Cloud Storage
+        Environment.SetEnvironmentVariable("GOOGLE_APPLICATION_CREDENTIALS", serviceAccountKeyPath);
+        Console.WriteLine($"Set GOOGLE_APPLICATION_CREDENTIALS environment variable: {serviceAccountKeyPath}");
     }
     catch (Exception ex)
     {
