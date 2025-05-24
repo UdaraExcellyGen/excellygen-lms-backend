@@ -4,16 +4,19 @@ using ExcellyGenLMS.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
 
-namespace ExcellyGenLMS.Infrastructure.Migrations
+namespace ExcellyGenLMS.Infrastructure.Data.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250524101501_DatabaseSyncMigrationU")]
+    partial class DatabaseSyncMigrationU
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1181,40 +1184,42 @@ namespace ExcellyGenLMS.Infrastructure.Migrations
                     b.Navigation("Lesson");
                 });
 
-<<<<<<< HEAD
             modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Course.CourseTechnology", b =>
                 {
                     b.HasOne("ExcellyGenLMS.Core.Entities.Course.Course", "Course")
                         .WithMany("CourseTechnologies")
-=======
-            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Course.Enrollment", b =>
-                {
-                    b.HasOne("ExcellyGenLMS.Core.Entities.Course.Course", "Course")
-                        .WithMany()
->>>>>>> 1d0db7143db1398cf4c8b7ab2577208b67f84a93
                         .HasForeignKey("CourseId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-<<<<<<< HEAD
                     b.HasOne("ExcellyGenLMS.Core.Entities.Admin.Technology", "Technology")
                         .WithMany()
                         .HasForeignKey("TechnologyId")
-=======
-                    b.HasOne("ExcellyGenLMS.Core.Entities.Auth.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
->>>>>>> 1d0db7143db1398cf4c8b7ab2577208b67f84a93
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.Navigation("Course");
 
-<<<<<<< HEAD
                     b.Navigation("Technology");
-=======
+                });
+
+            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Course.Enrollment", b =>
+                {
+                    b.HasOne("ExcellyGenLMS.Core.Entities.Course.Course", "Course")
+                        .WithMany()
+                        .HasForeignKey("CourseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ExcellyGenLMS.Core.Entities.Auth.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Course");
+
                     b.Navigation("User");
->>>>>>> 1d0db7143db1398cf4c8b7ab2577208b67f84a93
                 });
 
             modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Course.Lesson", b =>
