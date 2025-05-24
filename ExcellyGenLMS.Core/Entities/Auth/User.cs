@@ -32,8 +32,14 @@ namespace ExcellyGenLMS.Core.Entities.Auth
         public required DateTime JoinedDate { get; set; }
 
         public string JobRole { get; set; } = string.Empty;
+
         public string About { get; set; } = string.Empty;
+
         public string FirebaseUid { get; set; } = string.Empty;
+
         public string? Avatar { get; set; }
+
+        // New property to track if the user needs to change their password
+        public bool RequirePasswordChange { get; set; } = false;
     }
 }

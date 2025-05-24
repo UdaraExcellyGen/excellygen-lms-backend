@@ -1,3 +1,5 @@
+// Path: ExcellyGenLMS.Application/DTOs/Admin/TechnologyDto.cs
+
 using System;
 
 namespace ExcellyGenLMS.Application.DTOs.Admin
@@ -9,6 +11,8 @@ namespace ExcellyGenLMS.Application.DTOs.Admin
         public string Status { get; set; } = string.Empty;
         public DateTime CreatedAt { get; set; }
         public DateTime? UpdatedAt { get; set; }
+        public string CreatorId { get; set; } = string.Empty;
+        public string CreatorType { get; set; } = string.Empty;
     }
 
     public class CreateTechnologyDto

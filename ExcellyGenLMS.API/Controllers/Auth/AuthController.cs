@@ -9,6 +9,7 @@ using System.Collections.Generic;
 using System.Security.Authentication;
 using System.Threading.Tasks;
 using Microsoft.IdentityModel.Tokens;
+using ExcellyGenLMS.Application.Interfaces.Common; // Add this for IEmailService
 
 namespace ExcellyGenLMS.API.Controllers.Auth
 {
@@ -21,19 +22,22 @@ namespace ExcellyGenLMS.API.Controllers.Auth
         private readonly IUserRepository _userRepository;
         private readonly ILogger<AuthController> _logger;
         private readonly IFirebaseAuthService _firebaseAuthService;
+        private readonly IEmailService _emailService; // Add this field
 
         public AuthController(
             IAuthService authService,
             IUserService userService,
             IUserRepository userRepository,
             ILogger<AuthController> logger,
-            IFirebaseAuthService firebaseAuthService)
+            IFirebaseAuthService firebaseAuthService,
+            IEmailService emailService) // Add parameter to constructor
         {
             _authService = authService;
             _userService = userService;
             _userRepository = userRepository;
             _logger = logger;
             _firebaseAuthService = firebaseAuthService;
+            _emailService = emailService; // Store email service
         }
 
         [HttpPost("login")]
@@ -80,7 +84,9 @@ namespace ExcellyGenLMS.API.Controllers.Auth
                         Name = user.Name,
                         Email = user.Email,
                         Roles = user.Roles ?? new List<string>(),
-                        Token = tokenDto
+                        Token = tokenDto,
+                        RequirePasswordChange = user.RequirePasswordChange,
+                        Avatar = user.Avatar
                     };
 
                     _logger.LogInformation($"Login successful for user: {user.Id}");
@@ -105,7 +111,8 @@ namespace ExcellyGenLMS.API.Controllers.Auth
                         Name = user.Name,
                         Email = user.Email,
                         Roles = user.Roles ?? new List<string>(),
-                        Token = tokenDto
+                        Token = tokenDto,
+                        RequirePasswordChange = user.RequirePasswordChange
                     };
 
                     _logger.LogInformation($"Login successful for user: {user.Id} (fallback method)");
@@ -125,6 +132,28 @@ namespace ExcellyGenLMS.API.Controllers.Auth
                     _logger.LogError($"Inner exception: {ex.InnerException.Message}");
                 }
                 return StatusCode(500, new { message = "An error occurred during login", details = ex.Message });
+            }
+        }
+
+        [HttpPost("change-password")]
+        [Authorize]
+        public async Task<ActionResult> ChangePassword([FromBody] ChangePasswordDto changePasswordDto)
+        {
+            try
+            {
+                _logger.LogInformation($"Password change request for user: {changePasswordDto.UserId}");
+                var result = await _authService.ChangePasswordAsync(changePasswordDto);
+                return Ok(new { success = result, message = "Password changed successfully" });
+            }
+            catch (InvalidOperationException ex)
+            {
+                _logger.LogWarning($"Password change failed: {ex.Message}");
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Password change error: {ex.Message}");
+                return StatusCode(500, new { message = "An error occurred during password change", details = ex.Message });
             }
         }
 
@@ -285,6 +314,45 @@ namespace ExcellyGenLMS.API.Controllers.Auth
             {
                 _logger.LogError(ex, "Error syncing users with Firebase");
                 return StatusCode(500, new { message = "An error occurred while syncing users", details = ex.Message });
+            }
+        }
+
+        [HttpPost("send-temp-password")]
+        public async Task<IActionResult> SendTemporaryPassword([FromBody] SendTempPasswordDto request)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(request.UserId) || string.IsNullOrEmpty(request.Email) || string.IsNullOrEmpty(request.TempPassword))
+                {
+                    return BadRequest("Missing required fields");
+                }
+
+                // Verify the user exists and matches the email
+                var user = await _userService.GetUserByIdAsync(request.UserId);
+                if (user == null || user.Email != request.Email)
+                {
+                    // Don't reveal specifics for security
+                    return Ok(); // Return OK anyway to prevent user enumeration
+                }
+
+                // Send the email
+                bool success = await _emailService.SendTemporaryPasswordEmailAsync(
+                    user.Email,
+                    user.Name,
+                    request.TempPassword
+                );
+
+                if (!success)
+                {
+                    return StatusCode(500, "Failed to send email");
+                }
+
+                return Ok();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error sending temporary password email");
+                return StatusCode(500, "An unexpected error occurred");
             }
         }
 

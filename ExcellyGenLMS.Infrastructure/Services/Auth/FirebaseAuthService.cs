@@ -10,6 +10,9 @@ using ExcellyGenLMS.Application.Interfaces.Auth;
 using System;
 using System.Threading.Tasks;
 using System.Text.RegularExpressions;
+using System.Text.Json;
+using System.Text;
+using System.Net.Http;
 
 namespace ExcellyGenLMS.Infrastructure.Services.Auth
 {
@@ -19,6 +22,8 @@ namespace ExcellyGenLMS.Infrastructure.Services.Auth
         private readonly FirebaseAuth _firebaseAuth;
         private readonly IConfiguration _configuration;
         private readonly ILogger<FirebaseAuthService> _logger;
+        private readonly string _apiKey;
+        private readonly string _authDomain;
 
         public FirebaseAuthService(
             IConfiguration configuration,
@@ -29,24 +34,34 @@ namespace ExcellyGenLMS.Infrastructure.Services.Auth
 
             try
             {
-                // Initialize Firebase Auth Client for client-side operations
+                // Get and validate Firebase configuration
+                _apiKey = configuration["Firebase:ApiKey"] ??
+                    throw new InvalidOperationException("Firebase ApiKey is not configured in appsettings.json");
+
+                _authDomain = configuration["Firebase:AuthDomain"] ??
+                    throw new InvalidOperationException("Firebase AuthDomain is not configured in appsettings.json");
+
+                _logger.LogInformation($"Initializing Firebase Auth with ApiKey={_apiKey}, AuthDomain={_authDomain}");
+
+                // Initialize Firebase Auth Client for client-side operations with explicit configuration
                 var config = new FirebaseAuthConfig
                 {
-                    ApiKey = configuration["Firebase:ApiKey"],
-                    AuthDomain = configuration["Firebase:AuthDomain"],
+                    ApiKey = _apiKey,
+                    AuthDomain = _authDomain,
                     Providers = new FirebaseAuthProvider[]
                     {
                         new EmailProvider()
                     }
                 };
+
                 _authClient = new FirebaseAuthClient(config);
-                _logger.LogInformation("Firebase Auth Client initialized");
+                _logger.LogInformation("Firebase Auth Client initialized successfully");
 
                 // Firebase Admin SDK should already be initialized in Program.cs
                 _firebaseAuth = FirebaseAuth.DefaultInstance;
                 if (_firebaseAuth == null)
                 {
-                    throw new InvalidOperationException("FirebaseAuth.DefaultInstance is null. Make sure Firebase Admin SDK is initialized properly.");
+                    throw new InvalidOperationException("FirebaseAuth.DefaultInstance is null. Make sure Firebase Admin SDK is initialized properly in Program.cs.");
                 }
                 _logger.LogInformation("Firebase Auth Admin instance obtained successfully");
             }
@@ -212,6 +227,33 @@ namespace ExcellyGenLMS.Infrastructure.Services.Auth
             }
         }
 
+        public async Task<bool> UpdateUserPasswordAsync(string firebaseUid, string newPassword)
+        {
+            try
+            {
+                _logger.LogInformation($"Updating password for Firebase user with UID: {firebaseUid}");
+
+                await _firebaseAuth.UpdateUserAsync(new UserRecordArgs
+                {
+                    Uid = firebaseUid,
+                    Password = newPassword
+                });
+
+                _logger.LogInformation("Firebase user password updated successfully");
+                return true;
+            }
+            catch (FirebaseAdmin.Auth.FirebaseAuthException ex)
+            {
+                _logger.LogError(ex, "Failed to update Firebase user password");
+                throw new ApplicationException($"Failed to update Firebase user password: {ex.Message}", ex);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected error updating Firebase user password");
+                throw new ApplicationException($"Failed to update Firebase user password: {ex.Message}", ex);
+            }
+        }
+
         public async Task DeleteUserAsync(string firebaseUid)
         {
             try
@@ -232,6 +274,14 @@ namespace ExcellyGenLMS.Infrastructure.Services.Auth
             try
             {
                 _logger.LogInformation($"Sending password reset email to: {email}");
+                _logger.LogInformation($"Using auth domain: {_authDomain}");
+
+                // Verify we have valid config for client auth
+                if (string.IsNullOrEmpty(_apiKey) || string.IsNullOrEmpty(_authDomain))
+                {
+                    throw new InvalidOperationException($"Missing Firebase configuration. ApiKey or AuthDomain is not set.");
+                }
+
                 await _authClient.ResetEmailPasswordAsync(email);
                 _logger.LogInformation("Password reset email sent successfully");
                 return true;
@@ -240,6 +290,11 @@ namespace ExcellyGenLMS.Infrastructure.Services.Auth
             {
                 // Log the error but don't expose details to the client
                 _logger.LogWarning(ex, "Error resetting Firebase password");
+                return false;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Unexpected error in ResetPasswordAsync: {ex.Message}");
                 return false;
             }
         }
@@ -257,6 +312,70 @@ namespace ExcellyGenLMS.Infrastructure.Services.Auth
             {
                 _logger.LogError(ex, "Invalid Firebase token");
                 throw new ApplicationException($"Invalid Firebase token: {ex.Message}", ex);
+            }
+        }
+
+        public async Task<bool> AdminVerifyPasswordAsync(string email, string password)
+        {
+            try
+            {
+                _logger.LogInformation($"Admin verification of password for email: {email}");
+
+                // First get the user from Firebase
+                UserRecord userRecord;
+                try
+                {
+                    userRecord = await _firebaseAuth.GetUserByEmailAsync(email);
+                    _logger.LogInformation($"Found user in Firebase with UID: {userRecord.Uid}");
+                }
+                catch (FirebaseAdmin.Auth.FirebaseAuthException ex)
+                {
+                    _logger.LogWarning(ex, $"Error getting user from Firebase: {ex.Message}");
+                    return false;
+                }
+
+                // Use the Firebase Auth REST API to verify the password
+                try
+                {
+                    var authApiUrl = $"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={_apiKey}";
+
+                    using (var httpClient = new HttpClient())
+                    {
+                        var content = new StringContent(
+                            JsonSerializer.Serialize(new
+                            {
+                                email = email,
+                                password = password,
+                                returnSecureToken = true
+                            }),
+                            Encoding.UTF8,
+                            "application/json"
+                        );
+
+                        var response = await httpClient.PostAsync(authApiUrl, content);
+                        if (response.IsSuccessStatusCode)
+                        {
+                            _logger.LogInformation("Password verification successful");
+                            return true;
+                        }
+                        else
+                        {
+                            var errorContent = await response.Content.ReadAsStringAsync();
+                            _logger.LogWarning($"Password verification failed: {errorContent}");
+                            return false;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error during admin password verification");
+                    return false;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected error in AdminVerifyPasswordAsync");
+                return false;
             }
         }
 

@@ -69,5 +69,21 @@ namespace ExcellyGenLMS.Application.Interfaces.Auth
         /// <param name="password">User's password</param>
         /// <returns>Firebase UID of the user</returns>
         Task<string> SyncUserWithFirebaseAsync(string email, string password);
+
+        /// <summary>
+        /// Updates a Firebase user's password
+        /// </summary>
+        /// <param name="firebaseUid">Firebase UID of the user</param>
+        /// <param name="newPassword">The new password</param>
+        /// <returns>True if successful, false otherwise</returns>
+        Task<bool> UpdateUserPasswordAsync(string firebaseUid, string newPassword);
+
+        /// <summary>
+        /// Verifies a user's password using the Admin SDK (workaround for client auth issues)
+        /// </summary>
+        /// <param name="email">User's email</param>
+        /// <param name="password">Password to verify</param>
+        /// <returns>True if authentication is successful, false otherwise</returns>
+        Task<bool> AdminVerifyPasswordAsync(string email, string password);
     }
 }

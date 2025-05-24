@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 //using ExcellyGenLMS.Core.Entities.Course;
 
 //namespace ExcellyGenLMS.Core.Interfaces.Repositories.Admin
@@ -22,6 +23,10 @@ using System.Threading.Tasks;
 
 // Add an alias to avoid conflict if desired (alternative to FQN)
 // using CourseEntity = ExcellyGenLMS.Core.Entities.Course.Course;
+=======
+using System.Collections.Generic;
+using System.Threading.Tasks;
+>>>>>>> 1d0db7143db1398cf4c8b7ab2577208b67f84a93
 
 namespace ExcellyGenLMS.Core.Interfaces.Repositories.Admin
 {
@@ -31,6 +36,7 @@ namespace ExcellyGenLMS.Core.Interfaces.Repositories.Admin
     /// </summary>
     public interface ICourseAdminRepository
     {
+<<<<<<< HEAD
         /// <summary>
         /// Gets courses filtered by category ID (example admin function).
         /// </summary>
@@ -52,6 +58,11 @@ namespace ExcellyGenLMS.Core.Interfaces.Repositories.Admin
         /// <summary>
         /// Deletes a course (potentially different logic/checks than coordinator delete).
         /// </summary>
+=======
+        Task<List<ExcellyGenLMS.Core.Entities.Course.Course>> GetCoursesByCategoryIdAsync(string categoryId);
+        Task<ExcellyGenLMS.Core.Entities.Course.Course?> GetCourseByIdAsync(int id);
+        Task<ExcellyGenLMS.Core.Entities.Course.Course> UpdateCourseAsync(ExcellyGenLMS.Core.Entities.Course.Course course);
+>>>>>>> 1d0db7143db1398cf4c8b7ab2577208b67f84a93
         Task DeleteCourseAsync(int id);
     }
 }

@@ -32,5 +32,7 @@ namespace ExcellyGenLMS.Application.DTOs.Auth
         public required string Email { get; set; }
         public required List<string> Roles { get; set; }
         public required TokenDto Token { get; set; }
+        public bool RequirePasswordChange { get; set; } = false;
+        public string? Avatar { get; set; } 
     }
 }

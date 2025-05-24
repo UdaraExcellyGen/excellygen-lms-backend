@@ -161,10 +161,15 @@ namespace ExcellyGenLMS.Application.Services.Admin
             _logger.LogInformation("AdminService: Course {CourseId} deleted.", id);
         }
 
+<<<<<<< HEAD
         // --- Mapping Helper - Refactored ---
         // Maps the Core Course Entity to the Application Course DTO.
         // Assumes the input 'course' has related entities (Creator, Category, etc.) loaded via .Include() in the repository.
         private static CourseDto MapToDto(Course course)
+=======
+        // Helper method to map entity to DTO
+        private static CourseDto MapToDto(ExcellyGenLMS.Core.Entities.Course.Course course)
+>>>>>>> 1d0db7143db1398cf4c8b7ab2577208b67f84a93
         {
             if (course == null) return null!; // Or handle error/return default
 

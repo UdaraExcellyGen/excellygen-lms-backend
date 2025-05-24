@@ -7,8 +7,9 @@ namespace ExcellyGenLMS.Core.Interfaces.Repositories.Auth
     public interface IUserRepository
     {
         /// <summary>
-        /// Gets all users
+        /// Get all Users
         /// </summary>
+        /// <returns>return name</returns>
         Task<List<User>> GetAllUsersAsync();
 
         /// <summary>
