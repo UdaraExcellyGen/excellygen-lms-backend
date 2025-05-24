@@ -1,5 +1,5 @@
 using ExcellyGenLMS.Application.DTOs.Course;
-
+using ExcellyGenLMS.Application.DTOs.Admin;
 namespace ExcellyGenLMS.Application.Interfaces.Admin
 {
 	public interface ICourseAdminService

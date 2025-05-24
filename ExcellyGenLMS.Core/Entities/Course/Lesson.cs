@@ -1,6 +1,3 @@
-// Lesson.cs
-using System;
-using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
@@ -14,22 +11,20 @@ namespace ExcellyGenLMS.Core.Entities.Course
 
         [Required]
         [MaxLength(200)]
-        public required string LessonName { get; set; }
+        public required string LessonName { get; set; } // Represents Subtopic Title from frontend
 
-        [Required]
+        [Required] // Points required for each lesson
         public int LessonPoints { get; set; }
 
         public DateTime LastUpdatedDate { get; set; } = DateTime.UtcNow;
 
-        // Foreign key for Course
+        [Required]
         public int CourseId { get; set; }
-        
-        // Navigation property to Course
-        [ForeignKey("CourseId")]
-        public Course Course { get; set; } = null!;
 
-        // Navigation properties
-        //public ICollection<Quiz>? Quizzes { get; set; }
-        public ICollection<CourseDocument>? Documents { get; set; }
+        [ForeignKey("CourseId")]
+        public virtual Course Course { get; set; } = null!; // Ensure non-nullable relationship
+
+        // Initialize collection to avoid null reference issues
+        public virtual ICollection<CourseDocument> Documents { get; set; } = new List<CourseDocument>();
     }
 }
