@@ -212,6 +212,7 @@ builder.Services.AddScoped<IThreadComReplyRepository, ThreadComReplyRepository>(
 // ProjectManager repositories
 builder.Services.AddScoped<IProjectRepository, ProjectRepository>();
 builder.Services.AddScoped<IRoleRepository, RoleRepository>();
+builder.Services.AddScoped<IPMEmployeeAssignmentRepository, PMEmployeeAssignmentRepository>();
 
 // --- Register services ---
 // Auth services
@@ -251,6 +252,7 @@ builder.Services.AddScoped<IForumService, ForumService>();
 builder.Services.AddScoped<ExcellyGenLMS.Application.Interfaces.ProjectManager.IProjectService, ExcellyGenLMS.Application.Services.ProjectManager.ProjectService>();
 builder.Services.AddScoped<ExcellyGenLMS.Application.Interfaces.ProjectManager.IRoleService, ExcellyGenLMS.Application.Services.ProjectManager.RoleService>();
 builder.Services.AddScoped<ExcellyGenLMS.Application.Interfaces.ProjectManager.IPMTechnologyService, ExcellyGenLMS.Application.Services.ProjectManager.PMTechnologyService>();
+builder.Services.AddScoped<IEmployeeAssignmentService, EmployeeAssignmentService>();
 
 // --- Required for accessing HttpContext ---
 builder.Services.AddHttpContextAccessor();
