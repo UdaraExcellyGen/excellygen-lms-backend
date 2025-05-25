@@ -195,12 +195,29 @@ namespace ExcellyGenLMS.Infrastructure.Data.Migrations
                         .HasColumnType("datetime2")
                         .HasColumnName("completion_date");
 
+                    b.Property<int>("CourseId")
+                        .HasColumnType("int")
+                        .HasColumnName("course_id");
+
+                    b.Property<string>("FilePath")
+                        .HasMaxLength(1024)
+                        .HasColumnType("nvarchar(1024)");
+
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)")
                         .HasColumnName("certificate_title");
 
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)")
+                        .HasColumnName("user_id");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("CourseId");
+
+                    b.HasIndex("UserId");
 
                     b.ToTable("Certificates");
                 });
@@ -379,6 +396,37 @@ namespace ExcellyGenLMS.Infrastructure.Data.Migrations
                     b.ToTable("Lessons");
                 });
 
+            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Course.LessonProgress", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("CompletionDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsCompleted")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("LessonId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LessonId");
+
+                    b.HasIndex("UserId", "LessonId")
+                        .IsUnique();
+
+                    b.ToTable("LessonProgress");
+                });
+
             modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Course.MCQQuestionOption", b =>
                 {
                     b.Property<int>("McqOptionId")
@@ -450,6 +498,93 @@ namespace ExcellyGenLMS.Infrastructure.Data.Migrations
                     b.HasIndex("QuizBankId");
 
                     b.ToTable("Quizzes");
+                });
+
+            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Course.QuizAttempt", b =>
+                {
+                    b.Property<int>("QuizAttemptId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("quiz_attempt_id");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("QuizAttemptId"));
+
+                    b.Property<DateTime?>("CompletionTime")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("completion_time");
+
+                    b.Property<int>("CorrectAnswers")
+                        .HasColumnType("int")
+                        .HasColumnName("correct_answers");
+
+                    b.Property<bool>("IsCompleted")
+                        .HasColumnType("bit")
+                        .HasColumnName("is_completed");
+
+                    b.Property<int>("QuizId")
+                        .HasColumnType("int")
+                        .HasColumnName("quiz_id");
+
+                    b.Property<int?>("Score")
+                        .HasColumnType("int")
+                        .HasColumnName("score");
+
+                    b.Property<DateTime>("StartTime")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("start_time");
+
+                    b.Property<int>("TotalQuestions")
+                        .HasColumnType("int")
+                        .HasColumnName("total_questions");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("QuizAttemptId");
+
+                    b.HasIndex("QuizId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("QuizAttempts");
+                });
+
+            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Course.QuizAttemptAnswer", b =>
+                {
+                    b.Property<int>("QuizAttemptAnswerId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("quiz_attempt_answer_id");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("QuizAttemptAnswerId"));
+
+                    b.Property<bool>("IsCorrect")
+                        .HasColumnType("bit")
+                        .HasColumnName("is_correct");
+
+                    b.Property<int>("QuizAttemptId")
+                        .HasColumnType("int")
+                        .HasColumnName("quiz_attempt_id");
+
+                    b.Property<int>("QuizBankQuestionId")
+                        .HasColumnType("int")
+                        .HasColumnName("quiz_bank_question_id");
+
+                    b.Property<int?>("SelectedOptionId")
+                        .HasColumnType("int")
+                        .HasColumnName("selected_option_id");
+
+                    b.HasKey("QuizAttemptAnswerId");
+
+                    b.HasIndex("QuizAttemptId");
+
+                    b.HasIndex("QuizBankQuestionId");
+
+                    b.HasIndex("SelectedOptionId");
+
+                    b.ToTable("QuizAttemptAnswers");
                 });
 
             modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Course.QuizBank", b =>
@@ -1151,6 +1286,25 @@ namespace ExcellyGenLMS.Infrastructure.Data.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Course.Certificate", b =>
+                {
+                    b.HasOne("ExcellyGenLMS.Core.Entities.Course.Course", "Course")
+                        .WithMany()
+                        .HasForeignKey("CourseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ExcellyGenLMS.Core.Entities.Auth.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Course");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Course.Course", b =>
                 {
                     b.HasOne("ExcellyGenLMS.Core.Entities.Admin.CourseCategory", "Category")
@@ -1230,6 +1384,25 @@ namespace ExcellyGenLMS.Infrastructure.Data.Migrations
                     b.Navigation("Course");
                 });
 
+            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Course.LessonProgress", b =>
+                {
+                    b.HasOne("ExcellyGenLMS.Core.Entities.Course.Lesson", "Lesson")
+                        .WithMany()
+                        .HasForeignKey("LessonId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ExcellyGenLMS.Core.Entities.Auth.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Lesson");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Course.MCQQuestionOption", b =>
                 {
                     b.HasOne("ExcellyGenLMS.Core.Entities.Course.QuizBankQuestion", "QuizBankQuestion")
@@ -1258,6 +1431,51 @@ namespace ExcellyGenLMS.Infrastructure.Data.Migrations
                     b.Navigation("Lesson");
 
                     b.Navigation("QuizBank");
+                });
+
+            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Course.QuizAttempt", b =>
+                {
+                    b.HasOne("ExcellyGenLMS.Core.Entities.Course.Quiz", "Quiz")
+                        .WithMany()
+                        .HasForeignKey("QuizId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ExcellyGenLMS.Core.Entities.Auth.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Quiz");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Course.QuizAttemptAnswer", b =>
+                {
+                    b.HasOne("ExcellyGenLMS.Core.Entities.Course.QuizAttempt", "QuizAttempt")
+                        .WithMany("Answers")
+                        .HasForeignKey("QuizAttemptId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ExcellyGenLMS.Core.Entities.Course.QuizBankQuestion", "Question")
+                        .WithMany()
+                        .HasForeignKey("QuizBankQuestionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ExcellyGenLMS.Core.Entities.Course.MCQQuestionOption", "SelectedOption")
+                        .WithMany()
+                        .HasForeignKey("SelectedOptionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Question");
+
+                    b.Navigation("QuizAttempt");
+
+                    b.Navigation("SelectedOption");
                 });
 
             modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Course.QuizBankQuestion", b =>
@@ -1507,6 +1725,11 @@ namespace ExcellyGenLMS.Infrastructure.Data.Migrations
             modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Course.Lesson", b =>
                 {
                     b.Navigation("Documents");
+                });
+
+            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Course.QuizAttempt", b =>
+                {
+                    b.Navigation("Answers");
                 });
 
             modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Course.QuizBank", b =>

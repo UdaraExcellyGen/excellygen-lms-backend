@@ -18,11 +18,11 @@ namespace ExcellyGenLMS.Core.Entities.Course
         [Column("quiz_bank_id")]
         public int QuizBankId { get; set; }
         [ForeignKey("QuizBankId")]
-        public required QuizBank QuizBank { get; set; } // Navigation property - Added required
+        public QuizBank? QuizBank { get; set; } // Changed to nullable
 
         [Required]
         [Column("question_content", TypeName = "TEXT")]
-        public required string QuestionContent { get; set; } // Added required
+        public required string QuestionContent { get; set; } // Keep this required
 
         [Column("question_type")]
         [MaxLength(50)]

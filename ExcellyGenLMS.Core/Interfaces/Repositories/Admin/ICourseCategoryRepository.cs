@@ -1,4 +1,8 @@
+// ExcellyGenLMS.Core/Interfaces/Repositories/Admin/ICourseCategoryRepository.cs
 using ExcellyGenLMS.Core.Entities.Admin;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using System; // For TimeSpan
 
 namespace ExcellyGenLMS.Core.Interfaces.Repositories.Admin
 {
@@ -11,5 +15,7 @@ namespace ExcellyGenLMS.Core.Interfaces.Repositories.Admin
         Task DeleteCategoryAsync(string id);
         Task<CourseCategory> ToggleCategoryStatusAsync(string id);
         Task<int> GetCoursesCountByCategoryIdAsync(string categoryId);
+        Task<int> GetActiveLearnersCountByCategoryIdAsync(string categoryId);
+        Task<TimeSpan?> GetAverageCourseDurationByCategoryIdAsync(string categoryId);
     }
 }

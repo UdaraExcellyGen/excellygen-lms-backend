@@ -4,7 +4,8 @@ using System.ComponentModel.DataAnnotations.Schema;
 using ExcellyGenLMS.Core.Entities.Course;
 
 namespace ExcellyGenLMS.Core.Entities.Course
-{    [Table("MCQQuestionOptions")]
+{
+    [Table("MCQQuestionOptions")]
     public class MCQQuestionOption
     {
         [Key]
@@ -16,11 +17,11 @@ namespace ExcellyGenLMS.Core.Entities.Course
         [Column("quiz_bank_question_id")]
         public int QuizBankQuestionId { get; set; }
         [ForeignKey("QuizBankQuestionId")]
-        public required QuizBankQuestion QuizBankQuestion { get; set; } // Navigation property - Added required
+        public QuizBankQuestion? QuizBankQuestion { get; set; } // Changed to nullable
 
         [Required]
         [Column("option_text", TypeName = "TEXT")]
-        public required string OptionText { get; set; } // Added required
+        public required string OptionText { get; set; } // Keep this required
 
         [Column("is_correct")]
         public bool IsCorrect { get; set; }
