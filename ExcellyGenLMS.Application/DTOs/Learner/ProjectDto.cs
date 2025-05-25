@@ -13,5 +13,6 @@ namespace ExcellyGenLMS.Application.DTOs.Learner
         public string? EndDate { get; set; }
         public string Role { get; set; } = string.Empty;
         public List<string> Technologies { get; set; } = new List<string>();
+        public List<string> Team { get; set; } = new List<string>();
     }
 }
