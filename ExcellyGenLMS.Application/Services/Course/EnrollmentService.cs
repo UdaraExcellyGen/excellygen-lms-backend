@@ -22,25 +22,29 @@ namespace ExcellyGenLMS.Application.Services.Course
         public async Task<List<EnrollmentDto>> GetAllEnrollmentsAsync()
         {
             var enrollments = await _enrollmentRepository.GetAllEnrollmentsAsync();
-            return enrollments.Select(MapToDto).ToList();
+            return enrollments.Select(MapToDto).Where(e => e != null).ToList()!; // Filter nulls from mapping
         }
 
         public async Task<EnrollmentDto> GetEnrollmentByIdAsync(int id)
         {
             var enrollment = await _enrollmentRepository.GetEnrollmentByIdAsync(id);
-            return MapToDto(enrollment);
+            if (enrollment == null)
+            {
+                throw new KeyNotFoundException($"Enrollment with ID {id} not found");
+            }
+            return MapToDto(enrollment)!; // Add null-forgiving as it's guaranteed not null here
         }
 
         public async Task<List<EnrollmentDto>> GetEnrollmentsByUserIdAsync(string userId)
         {
             var enrollments = await _enrollmentRepository.GetEnrollmentsByUserIdAsync(userId);
-            return enrollments.Select(MapToDto).ToList();
+            return enrollments.Select(MapToDto).Where(e => e != null).ToList()!;
         }
 
         public async Task<List<EnrollmentDto>> GetEnrollmentsByCourseIdAsync(int courseId)
         {
             var enrollments = await _enrollmentRepository.GetEnrollmentsByCourseIdAsync(courseId);
-            return enrollments.Select(MapToDto).ToList();
+            return enrollments.Select(MapToDto).Where(e => e != null).ToList()!;
         }
 
         public async Task<EnrollmentDto> CreateEnrollmentAsync(CreateEnrollmentDto createEnrollmentDto)
@@ -54,16 +58,20 @@ namespace ExcellyGenLMS.Application.Services.Course
             };
 
             var createdEnrollment = await _enrollmentRepository.CreateEnrollmentAsync(enrollment);
-            return MapToDto(createdEnrollment);
+            return MapToDto(createdEnrollment)!;
         }
 
         public async Task<EnrollmentDto> UpdateEnrollmentAsync(int id, UpdateEnrollmentDto updateEnrollmentDto)
         {
             var enrollment = await _enrollmentRepository.GetEnrollmentByIdAsync(id);
+            if (enrollment == null)
+            {
+                throw new KeyNotFoundException($"Enrollment with ID {id} not found");
+            }
             enrollment.Status = updateEnrollmentDto.Status;
 
             var updatedEnrollment = await _enrollmentRepository.UpdateEnrollmentAsync(enrollment);
-            return MapToDto(updatedEnrollment);
+            return MapToDto(updatedEnrollment)!;
         }
 
         public async Task DeleteEnrollmentAsync(int id)
@@ -71,8 +79,10 @@ namespace ExcellyGenLMS.Application.Services.Course
             await _enrollmentRepository.DeleteEnrollmentAsync(id);
         }
 
-        private static EnrollmentDto MapToDto(Enrollment enrollment)
+        // Changed parameter to nullable (Enrollment? enrollment)
+        private static EnrollmentDto? MapToDto(Enrollment? enrollment)
         {
+            if (enrollment == null) return null;
             return new EnrollmentDto
             {
                 Id = enrollment.Id,
@@ -80,6 +90,7 @@ namespace ExcellyGenLMS.Application.Services.Course
                 CourseId = enrollment.CourseId,
                 EnrollmentDate = enrollment.EnrollmentDate,
                 Status = enrollment.Status,
+                // Added null-conditional operators for navigation properties
                 UserName = enrollment.User?.Name ?? "Unknown",
                 CourseTitle = enrollment.Course?.Title ?? "Unknown"
             };

@@ -59,6 +59,11 @@ namespace ExcellyGenLMS.Infrastructure.Data
         public DbSet<QuizBankQuestion> QuizBankQuestions { get; set; } = null!;
         public DbSet<Enrollment> Enrollments { get; set; } = null!;
         public DbSet<Certificate> Certificates { get; set; } = null!;
+        public DbSet<LessonProgress> LessonProgress { get; set; } = null!;
+
+        // Quiz Attempt Module
+        public DbSet<QuizAttempt> QuizAttempts { get; set; } = null!;
+        public DbSet<QuizAttemptAnswer> QuizAttemptAnswers { get; set; } = null!;
 
         // Project Manager Module
         public DbSet<PMProject> PMProjects { get; set; } = null!;
@@ -67,7 +72,6 @@ namespace ExcellyGenLMS.Infrastructure.Data
         public DbSet<PMProjectRequiredRole> PMProjectRequiredRoles { get; set; } = null!;
         public DbSet<PMRoleDefinition> PMRoleDefinitions { get; set; } = null!;
         public DbSet<PMNotification> PMNotifications { get; set; } = null!;
-
 
         // --- Model Configuration ---
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -93,7 +97,8 @@ namespace ExcellyGenLMS.Infrastructure.Data
             });
 
             // Configure RefreshToken entity
-            modelBuilder.Entity<RefreshToken>(entity => {
+            modelBuilder.Entity<RefreshToken>(entity =>
+            {
                 entity.HasKey(e => e.Id);
                 entity.HasOne(e => e.User)
                       .WithMany()
@@ -124,7 +129,8 @@ namespace ExcellyGenLMS.Infrastructure.Data
             });
 
             // Configure Lesson entity
-            modelBuilder.Entity<Lesson>(entity => {
+            modelBuilder.Entity<Lesson>(entity =>
+            {
                 entity.HasKey(e => e.Id);
                 entity.Property(e => e.LessonName).HasMaxLength(200).IsRequired();
 
@@ -136,7 +142,8 @@ namespace ExcellyGenLMS.Infrastructure.Data
             });
 
             // Configure CourseDocument entity
-            modelBuilder.Entity<CourseDocument>(entity => {
+            modelBuilder.Entity<CourseDocument>(entity =>
+            {
                 entity.HasKey(e => e.Id);
                 entity.Property(e => e.DocumentType).HasConversion<string>().HasMaxLength(50).IsRequired();
                 entity.Property(e => e.FilePath).HasMaxLength(1024).IsRequired();
@@ -150,7 +157,8 @@ namespace ExcellyGenLMS.Infrastructure.Data
             });
 
             // Configure Technology entity
-            modelBuilder.Entity<Technology>(entity => {
+            modelBuilder.Entity<Technology>(entity =>
+            {
                 entity.HasKey(e => e.Id);
                 entity.Property(e => e.Name).HasMaxLength(100).IsRequired();
                 entity.Property(e => e.Status).HasMaxLength(20).IsRequired();
@@ -213,7 +221,8 @@ namespace ExcellyGenLMS.Infrastructure.Data
                     .HasForeignKey(tr => tr.CommentorId)
                     .OnDelete(DeleteBehavior.Restrict);
 
-                entity.HasOne(tr => tr.Comment)
+                modelBuilder.Entity<ThreadComReply>()
+                    .HasOne(tr => tr.Comment)
                     .WithMany(tc => tc.Replies)
                     .HasForeignKey(tr => tr.CommentId)
                     .OnDelete(DeleteBehavior.Cascade);
@@ -239,17 +248,19 @@ namespace ExcellyGenLMS.Infrastructure.Data
                 .OnDelete(DeleteBehavior.Cascade);
 
             // Configure UserTechnology entity
-            modelBuilder.Entity<UserTechnology>().HasKey(e => e.Id);
-            modelBuilder.Entity<UserTechnology>()
-                .HasOne(e => e.User)
-                .WithMany()
-                .HasForeignKey(e => e.UserId)
-                .OnDelete(DeleteBehavior.Cascade);
-            modelBuilder.Entity<UserTechnology>()
-                .HasOne(e => e.Technology)
-                .WithMany()
-                .HasForeignKey(e => e.TechnologyId)
-                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<UserTechnology>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.HasOne(e => e.User)
+                    .WithMany()
+                    .HasForeignKey(e => e.UserId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                entity.HasOne(e => e.Technology)
+                    .WithMany()
+                    .HasForeignKey(e => e.TechnologyId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
 
             // Configure Project entity
             modelBuilder.Entity<Project>().HasKey(e => e.Id);
@@ -297,7 +308,8 @@ namespace ExcellyGenLMS.Infrastructure.Data
                 .OnDelete(DeleteBehavior.Cascade);
 
             // Configure Notification entity
-            modelBuilder.Entity<Notification>(entity => {
+            modelBuilder.Entity<Notification>(entity =>
+            {
                 entity.HasKey(e => e.NotificationID);
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
                 entity.Property(e => e.IsRead).HasDefaultValue(false);
@@ -335,6 +347,39 @@ namespace ExcellyGenLMS.Infrastructure.Data
                 .HasForeignKey(mcqOption => mcqOption.QuizBankQuestionId)
                 .OnDelete(DeleteBehavior.Cascade);
 
+            // Configure QuizAttempt entities
+            modelBuilder.Entity<QuizAttempt>(entity =>
+            {
+                entity.HasKey(e => e.QuizAttemptId);
+                entity.HasOne(e => e.Quiz)
+                      .WithMany()
+                      .HasForeignKey(e => e.QuizId)
+                      .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.User)
+                      .WithMany()
+                      .HasForeignKey(e => e.UserId)
+                      .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<QuizAttemptAnswer>(entity =>
+            {
+                entity.HasKey(e => e.QuizAttemptAnswerId);
+                entity.HasOne(e => e.QuizAttempt)
+                      .WithMany(a => a.Answers)
+                      .HasForeignKey(e => e.QuizAttemptId)
+                      .OnDelete(DeleteBehavior.Cascade);
+                modelBuilder.Entity<QuizAttemptAnswer>()
+                      .HasOne(e => e.Question)
+                      .WithMany()
+                      .HasForeignKey(e => e.QuizBankQuestionId)
+                      .OnDelete(DeleteBehavior.Restrict);
+                modelBuilder.Entity<QuizAttemptAnswer>()
+                      .HasOne(e => e.SelectedOption)
+                      .WithMany()
+                      .HasForeignKey(e => e.SelectedOptionId)
+                      .OnDelete(DeleteBehavior.Restrict);
+            });
+
             // Configure Enrollment entity
             modelBuilder.Entity<Enrollment>().HasKey(e => e.Id);
             modelBuilder.Entity<Enrollment>()
@@ -350,6 +395,31 @@ namespace ExcellyGenLMS.Infrastructure.Data
 
             // Configure Certificate entity
             modelBuilder.Entity<Certificate>().HasKey(c => c.Id);
+            modelBuilder.Entity<Certificate>()
+                .HasOne(c => c.User)
+                .WithMany()
+                .HasForeignKey(c => c.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<Certificate>()
+                .HasOne(c => c.Course)
+                .WithMany()
+                .HasForeignKey(c => c.CourseId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Configure LessonProgress entity
+            modelBuilder.Entity<LessonProgress>(entity =>
+            {
+                entity.HasKey(lp => lp.Id);
+                entity.HasOne(lp => lp.User)
+                      .WithMany()
+                      .HasForeignKey(lp => lp.UserId)
+                      .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(lp => lp.Lesson)
+                      .WithMany()
+                      .HasForeignKey(lp => lp.LessonId)
+                      .OnDelete(DeleteBehavior.Cascade);
+                entity.HasIndex(lp => new { lp.UserId, lp.LessonId }).IsUnique();
+            });
 
             // ========= Project Manager Module Configuration ==========
 

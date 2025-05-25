@@ -15,7 +15,7 @@ namespace ExcellyGenLMS.Core.Entities.Course
         [Required]
         [MaxLength(200)]
         [Column("quiz_title")]
-        public required string QuizTitle { get; set; } // Added required
+        public required string QuizTitle { get; set; } // Keep this required
 
         [Column("time_limit_minutes")]
         public int TimeLimitMinutes { get; set; }
@@ -29,11 +29,11 @@ namespace ExcellyGenLMS.Core.Entities.Course
         [Column("quiz_bank_id")]
         public int QuizBankId { get; set; }
         [ForeignKey("QuizBankId")]
-        public required QuizBank QuizBank { get; set; } // Navigation property - Added required
+        public QuizBank? QuizBank { get; set; } // Changed to nullable
 
         [Column("lesson_id")]
         public int LessonId { get; set; }
         [ForeignKey("LessonId")]
-        public required Lesson Lesson { get; set; } // Navigation property - Added required
+        public Lesson? Lesson { get; set; } // Changed to nullable
     }
 }

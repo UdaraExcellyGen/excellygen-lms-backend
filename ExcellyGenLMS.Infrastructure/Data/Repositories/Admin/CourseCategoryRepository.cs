@@ -1,7 +1,12 @@
-using Microsoft.EntityFrameworkCore;
+// ExcellyGenLMS.Infrastructure/Data/Repositories/Admin/CourseCategoryRepository.cs
 using ExcellyGenLMS.Core.Entities.Admin;
 using ExcellyGenLMS.Core.Interfaces.Repositories.Admin;
 using ExcellyGenLMS.Infrastructure.Data;
+using Microsoft.EntityFrameworkCore;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Admin
 {
@@ -53,8 +58,7 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Admin
             var category = await _context.CourseCategories.FindAsync(id)
                 ?? throw new KeyNotFoundException($"Category with ID {id} not found");
 
-            // Toggle the status
-            category.Status = category.Status == "active" ? "inactive" : "active";
+            category.Status = (category.Status == "active") ? "inactive" : "active";
             category.UpdatedAt = DateTime.UtcNow;
 
             _context.CourseCategories.Update(category);
@@ -66,6 +70,26 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Admin
         public async Task<int> GetCoursesCountByCategoryIdAsync(string categoryId)
         {
             return await _context.Courses.CountAsync(c => c.CategoryId == categoryId);
+        }
+
+        public async Task<int> GetActiveLearnersCountByCategoryIdAsync(string categoryId)
+        {
+            return await _context.Enrollments
+                                 .Where(e => e.Course != null && e.Course.CategoryId == categoryId)
+                                 .Select(e => e.UserId)
+                                 .Distinct()
+                                 .CountAsync();
+        }
+
+        public async Task<TimeSpan?> GetAverageCourseDurationByCategoryIdAsync(string categoryId)
+        {
+            var averageHours = await _context.Courses
+                                             .AsNoTracking()
+                                             .Where(c => c.CategoryId == categoryId)
+                                             .Select(c => (double?)c.EstimatedTime)
+                                             .AverageAsync();
+
+            return averageHours.HasValue ? TimeSpan.FromHours(averageHours.Value) : (TimeSpan?)null;
         }
     }
 }

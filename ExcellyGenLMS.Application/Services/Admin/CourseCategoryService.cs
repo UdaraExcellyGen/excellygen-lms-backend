@@ -1,7 +1,12 @@
+// ExcellyGenLMS.Application/Services/Admin/CourseCategoryService.cs
 using ExcellyGenLMS.Application.DTOs.Admin;
 using ExcellyGenLMS.Application.Interfaces.Admin;
 using ExcellyGenLMS.Core.Entities.Admin;
 using ExcellyGenLMS.Core.Interfaces.Repositories.Admin;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace ExcellyGenLMS.Application.Services.Admin
 {
@@ -22,7 +27,14 @@ namespace ExcellyGenLMS.Application.Services.Admin
             foreach (var category in categories)
             {
                 var coursesCount = await _categoryRepository.GetCoursesCountByCategoryIdAsync(category.Id);
-                categoryDtos.Add(MapToDto(category, coursesCount));
+                var activeLearnersCount = await _categoryRepository.GetActiveLearnersCountByCategoryIdAsync(category.Id);
+                var avgDurationTimeSpan = await _categoryRepository.GetAverageCourseDurationByCategoryIdAsync(category.Id);
+
+                string avgDurationString = avgDurationTimeSpan.HasValue
+                    ? $"{Math.Round(avgDurationTimeSpan.Value.TotalHours)} hours"
+                    : "N/A";
+
+                categoryDtos.Add(MapToDto(category, coursesCount, activeLearnersCount, avgDurationString));
             }
 
             return categoryDtos;
@@ -34,7 +46,14 @@ namespace ExcellyGenLMS.Application.Services.Admin
                 ?? throw new KeyNotFoundException($"Category with ID {id} not found");
 
             var coursesCount = await _categoryRepository.GetCoursesCountByCategoryIdAsync(category.Id);
-            return MapToDto(category, coursesCount);
+            var activeLearnersCount = await _categoryRepository.GetActiveLearnersCountByCategoryIdAsync(category.Id);
+            var avgDurationTimeSpan = await _categoryRepository.GetAverageCourseDurationByCategoryIdAsync(category.Id);
+
+            string avgDurationString = avgDurationTimeSpan.HasValue
+                ? $"{Math.Round(avgDurationTimeSpan.Value.TotalHours)} hours"
+                : "N/A";
+
+            return MapToDto(category, coursesCount, activeLearnersCount, avgDurationString);
         }
 
         public async Task<CourseCategoryDto> CreateCategoryAsync(CreateCourseCategoryDto createCategoryDto)
@@ -45,12 +64,12 @@ namespace ExcellyGenLMS.Application.Services.Admin
                 Title = createCategoryDto.Title,
                 Description = createCategoryDto.Description,
                 Icon = createCategoryDto.Icon,
-                Status = "active", // Default to active
+                Status = "active",
                 CreatedAt = DateTime.UtcNow
             };
 
             var createdCategory = await _categoryRepository.CreateCategoryAsync(category);
-            return MapToDto(createdCategory, 0); // New category has 0 courses
+            return MapToDto(createdCategory, 0, 0, "N/A");
         }
 
         public async Task<CourseCategoryDto> UpdateCategoryAsync(string id, UpdateCourseCategoryDto updateCategoryDto)
@@ -58,7 +77,6 @@ namespace ExcellyGenLMS.Application.Services.Admin
             var category = await _categoryRepository.GetCategoryByIdAsync(id)
                 ?? throw new KeyNotFoundException($"Category with ID {id} not found");
 
-            // Update properties
             category.Title = updateCategoryDto.Title;
             category.Description = updateCategoryDto.Description;
             category.Icon = updateCategoryDto.Icon;
@@ -66,8 +84,14 @@ namespace ExcellyGenLMS.Application.Services.Admin
 
             var updatedCategory = await _categoryRepository.UpdateCategoryAsync(category);
             var coursesCount = await _categoryRepository.GetCoursesCountByCategoryIdAsync(category.Id);
+            var activeLearnersCount = await _categoryRepository.GetActiveLearnersCountByCategoryIdAsync(category.Id);
+            var avgDurationTimeSpan = await _categoryRepository.GetAverageCourseDurationByCategoryIdAsync(category.Id);
 
-            return MapToDto(updatedCategory, coursesCount);
+            string avgDurationString = avgDurationTimeSpan.HasValue
+                ? $"{Math.Round(avgDurationTimeSpan.Value.TotalHours)} hours"
+                : "N/A";
+
+            return MapToDto(updatedCategory, coursesCount, activeLearnersCount, avgDurationString);
         }
 
         public async Task DeleteCategoryAsync(string id)
@@ -79,12 +103,17 @@ namespace ExcellyGenLMS.Application.Services.Admin
         {
             var category = await _categoryRepository.ToggleCategoryStatusAsync(id);
             var coursesCount = await _categoryRepository.GetCoursesCountByCategoryIdAsync(category.Id);
+            var activeLearnersCount = await _categoryRepository.GetActiveLearnersCountByCategoryIdAsync(category.Id);
+            var avgDurationTimeSpan = await _categoryRepository.GetAverageCourseDurationByCategoryIdAsync(category.Id);
 
-            return MapToDto(category, coursesCount);
+            string avgDurationString = avgDurationTimeSpan.HasValue
+                ? $"{Math.Round(avgDurationTimeSpan.Value.TotalHours)} hours"
+                : "N/A";
+
+            return MapToDto(category, coursesCount, activeLearnersCount, avgDurationString);
         }
 
-        // Helper method to map entity to DTO
-        private static CourseCategoryDto MapToDto(CourseCategory category, int coursesCount)
+        private static CourseCategoryDto MapToDto(CourseCategory category, int coursesCount, int activeLearnersCount, string avgDuration)
         {
             return new CourseCategoryDto
             {
@@ -93,7 +122,9 @@ namespace ExcellyGenLMS.Application.Services.Admin
                 Description = category.Description,
                 Icon = category.Icon,
                 Status = category.Status,
-                TotalCourses = coursesCount
+                TotalCourses = coursesCount,
+                ActiveLearnersCount = activeLearnersCount,
+                AvgDuration = avgDuration
             };
         }
     }

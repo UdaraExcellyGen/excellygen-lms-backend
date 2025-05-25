@@ -1,3 +1,4 @@
+// C:\Users\ASUS\Desktop\quizz\excellygen-lms-backend\ExcellyGenLMS.Infrastructure\Data\Repositories\Course\CourseDocumentRepository.cs
 using ExcellyGenLMS.Core.Entities.Course;
 using ExcellyGenLMS.Core.Interfaces.Repositories.Course;
 using ExcellyGenLMS.Infrastructure.Data;
@@ -8,8 +9,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
-// Adjust namespace to match your project structure
-namespace ExcellyGenLMS.Infrastructure.Data.Repositories.CourseRepo
+// Namespace: ExcellyGenLMS.Infrastructure.Data.Repositories.Course
+namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
 {
     public class CourseDocumentRepository : ICourseDocumentRepository
     {
@@ -24,7 +25,6 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.CourseRepo
 
         public async Task<CourseDocument?> GetByIdAsync(int id)
         {
-            // FindAsync is suitable for PK lookups
             return await _context.CourseDocuments.FindAsync(id);
         }
 
@@ -32,8 +32,8 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.CourseRepo
         {
             return await _context.CourseDocuments
                 .Where(d => d.LessonId == lessonId)
-                .AsNoTracking() // Use for read-only list retrieval
-                .OrderBy(d => d.Name) // Optional default ordering
+                .AsNoTracking()
+                .OrderBy(d => d.Name)
                 .ToListAsync();
         }
 
@@ -59,9 +59,7 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.CourseRepo
             else
             {
                 _logger.LogWarning("Attempted to delete document record with ID {DocumentId}, but it was not found.", id);
-                // Optional: throw KeyNotFoundException
             }
-            // Physical file deletion should be handled in the Service layer *before* calling this method.
         }
     }
 }

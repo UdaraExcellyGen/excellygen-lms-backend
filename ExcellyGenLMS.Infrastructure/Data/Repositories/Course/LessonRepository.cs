@@ -1,3 +1,4 @@
+// C:\Users\ASUS\Desktop\quizz\excellygen-lms-backend\ExcellyGenLMS.Infrastructure\Data\Repositories\Course\LessonRepository.cs
 using ExcellyGenLMS.Core.Entities.Course;
 using ExcellyGenLMS.Core.Interfaces.Repositories.Course;
 using ExcellyGenLMS.Infrastructure.Data;
@@ -8,8 +9,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
-// Adjust namespace to match your project structure
-namespace ExcellyGenLMS.Infrastructure.Data.Repositories.CourseRepo
+// Namespace: ExcellyGenLMS.Infrastructure.Data.Repositories.Course
+namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
 {
     public class LessonRepository : ILessonRepository
     {
@@ -24,10 +25,9 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.CourseRepo
 
         public async Task<Lesson?> GetByIdAsync(int id)
         {
-            // Include documents when fetching a single lesson by ID
             return await _context.Lessons
-                           .Include(l => l.Documents) // Eager load associated documents
-                           .AsNoTracking() // Use if typically read-only access
+                           .Include(l => l.Documents)
+                           .AsNoTracking()
                            .FirstOrDefaultAsync(l => l.Id == id);
         }
 
@@ -35,9 +35,9 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.CourseRepo
         {
             return await _context.Lessons
                 .Where(l => l.CourseId == courseId)
-                .Include(l => l.Documents) // Include documents for lists too
-                .AsNoTracking() // Use if typically read-only access
-                .OrderBy(l => l.Id) // Optional: Provide default ordering
+                .Include(l => l.Documents)
+                .AsNoTracking()
+                .OrderBy(l => l.Id)
                 .ToListAsync();
         }
 
@@ -55,23 +55,9 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.CourseRepo
         {
             if (lesson == null) throw new ArgumentNullException(nameof(lesson));
 
-            // Update timestamp before saving
             lesson.LastUpdatedDate = DateTime.UtcNow;
 
-            // Mark the entity as modified. EF Core will update all properties.
-            // Using Entry().State is simpler if the 'lesson' object is potentially detached
-            // but represents the desired state.
             _context.Entry(lesson).State = EntityState.Modified;
-
-            // Alternative if 'lesson' might have navigation properties that shouldn't be overwritten:
-            // var existingLesson = await _context.Lessons.FindAsync(lesson.Id);
-            // if (existingLesson != null) {
-            //     _context.Entry(existingLesson).CurrentValues.SetValues(lesson); // Only copies scalar properties
-            //     existingLesson.LastUpdatedDate = DateTime.UtcNow;
-            // } else {
-            //     _logger.LogError("Attempted to update Lesson with ID {LessonId}, but it was not found.", lesson.Id);
-            //     throw new KeyNotFoundException($"Lesson with ID {lesson.Id} not found for update.");
-            // }
 
             try
             {
@@ -81,13 +67,13 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.CourseRepo
             catch (DbUpdateConcurrencyException ex)
             {
                 _logger.LogError(ex, "Concurrency error updating lesson {LessonId}.", lesson.Id);
-                throw; // Re-throw
+                throw;
             }
         }
 
         public async Task DeleteAsync(int id)
         {
-            var lesson = await _context.Lessons.FindAsync(id); // FindAsync is efficient for PK lookups
+            var lesson = await _context.Lessons.FindAsync(id);
             if (lesson != null)
             {
                 _context.Lessons.Remove(lesson);
@@ -97,9 +83,7 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.CourseRepo
             else
             {
                 _logger.LogWarning("Attempted to delete lesson with ID {LessonId}, but it was not found.", id);
-                // Optional: throw KeyNotFoundException
             }
-            // Associated CourseDocuments should be handled by Cascade Delete configuration in DbContext.
         }
     }
 }

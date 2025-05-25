@@ -1,390 +1,441 @@
+// ExcellyGenLMS.API/Program.cs
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using FirebaseAdmin;
 using Google.Apis.Auth.OAuth2;
-using ExcellyGenLMS.Infrastructure.Data; // Base DbContext namespace
-using ExcellyGenLMS.Core.Interfaces.Repositories.Auth;
-using ExcellyGenLMS.Infrastructure.Data.Repositories.Auth; // Auth Repo implementations
-using ExcellyGenLMS.Application.Interfaces.Auth;
-using ExcellyGenLMS.Application.Services.Auth; // Auth Service implementations
-using ExcellyGenLMS.Infrastructure.Services.Auth; // Infrastructure Services (e.g., Firebase Auth Service)
 using Microsoft.OpenApi.Models;
-using ExcellyGenLMS.API.Middleware; // Your custom middleware namespace
-using ExcellyGenLMS.Application.Interfaces.Admin;
-using ExcellyGenLMS.Application.Services.Admin; // Admin Service implementations
 using Microsoft.AspNetCore.Identity;
-using ExcellyGenLMS.Core.Entities.Auth;
-using ExcellyGenLMS.Core.Interfaces.Repositories.Admin;
-using ExcellyGenLMS.Infrastructure.Data.Repositories.Admin; // Admin Repo implementations
-using ExcellyGenLMS.Application.Interfaces.Common;
-using ExcellyGenLMS.Infrastructure.Services.Common; // Common Services (e.g., FileService)
-using Microsoft.Extensions.FileProviders;
-using System.IO;
-
-// Learner Module Interface imports (Core and Application)
-using ExcellyGenLMS.Core.Interfaces.Repositories.Learner;
-using ExcellyGenLMS.Application.Interfaces.Learner;
-
-// Project Manager Module Interface imports
-using ExcellyGenLMS.Core.Interfaces.Repositories.ProjectManager;
-using ExcellyGenLMS.Application.Interfaces.ProjectManager;
-
-// Learner Module Implementation imports (Infrastructure and Application)
-using ExcellyGenLMS.Infrastructure.Data.Repositories.Learner;
-using ExcellyGenLMS.Application.Services.Learner;
-
-// Project Manager Module Implementation imports
-using ExcellyGenLMS.Infrastructure.Data.Repositories.ProjectManager;
-using ExcellyGenLMS.Application.Services.ProjectManager;
-
-// Added for Analytics functionality
 using System.Data;
 using Microsoft.Data.SqlClient;
-using ExcellyGenLMS.Core.Interfaces.Repositories.Course;
-using ExcellyGenLMS.Infrastructure.Data.Repositories.Course;
-using ExcellyGenLMS.Application.Interfaces.Course;
-using ExcellyGenLMS.Application.Services.Course;
+using Microsoft.Extensions.FileProviders;
+using System.IO;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Security.Claims;
+using System.Threading.Tasks;
 
-// Added for File Storage Service
-using ExcellyGenLMS.Core.Interfaces.Infrastructure;
+// Infrastructure Project Usings (for DbContext and Repository Implementations)
+using ExcellyGenLMS.Infrastructure.Data;
+using ExcellyGenLMS.Infrastructure.Data.Repositories.Auth;
+using ExcellyGenLMS.Infrastructure.Data.Repositories.Admin;
+using ExcellyGenLMS.Infrastructure.Data.Repositories.Course; // Unified Course Repositories Namespace
+using ExcellyGenLMS.Infrastructure.Data.Repositories.Learner;
+using ExcellyGenLMS.Infrastructure.Data.Repositories.ProjectManager;
+using ExcellyGenLMS.Infrastructure.Services.Auth;
+using ExcellyGenLMS.Infrastructure.Services.Common;
 using ExcellyGenLMS.Infrastructure.Services.Storage;
 
-// Corrected Course module imports
-using ExcellyGenLMS.Infrastructure.Data.Repositories.CourseRepo;  // Note the "Repo" suffix
-using ExcellyGenLMS.Application.Services.CourseSvc;  // Note the "Svc" suffix
+
+// Core Project Usings (for Interfaces and Entities)
+using ExcellyGenLMS.Core.Interfaces.Repositories.Auth;
+using ExcellyGenLMS.Core.Interfaces.Repositories.Admin;
+using ExcellyGenLMS.Core.Interfaces.Repositories.Course;
+using ExcellyGenLMS.Core.Interfaces.Repositories.Learner;
+using ExcellyGenLMS.Core.Interfaces.Repositories.ProjectManager;
+using ExcellyGenLMS.Core.Entities.Auth;
+using ExcellyGenLMS.Core.Interfaces.Infrastructure;
+
+// Application Project Usings (for Service Interfaces and Implementations)
+using ExcellyGenLMS.Application.Interfaces.Auth;
+using ExcellyGenLMS.Application.Interfaces.Admin;
+using ExcellyGenLMS.Application.Interfaces.Common;
+using ExcellyGenLMS.Application.Interfaces.Course;
+using ExcellyGenLMS.Application.Interfaces.Learner;
+using ExcellyGenLMS.Application.Interfaces.ProjectManager;
+using ExcellyGenLMS.Application.Services.Auth;
+using ExcellyGenLMS.Application.Services.Admin;
+using ExcellyGenLMS.Application.Services.Course;
+using ExcellyGenLMS.Application.Services.Learner;
+using ExcellyGenLMS.Application.Services.ProjectManager;
+
+
+// API Project Usings (for Middleware and Controllers)
+using ExcellyGenLMS.API.Middleware;
+using ExcellyGenLMS.API.Controllers.Admin; // For Admin controllers
+using ExcellyGenLMS.API.Controllers.Course; // For Course controllers
+using ExcellyGenLMS.API.Controllers.Learner; // For Learner controllers (LearnerStatsController will be here)
+using ExcellyGenLMS.API.Controllers.Auth; // For Auth controllers
+using ExcellyGenLMS.API.Controllers.ProjectManager; // For ProjectManager controllers
+
 
 var builder = WebApplication.CreateBuilder(args);
 
-// --- Add DbContext configuration ---
+// === DATABASE CONFIGURATION ===
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// --- Add IDbConnection for Dapper ---
 builder.Services.AddTransient<IDbConnection>(sp =>
     new SqlConnection(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// --- Add CORS ---
+// === CORS CONFIGURATION ===
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowReactApp",
-        policyBuilder =>
-        {
-            policyBuilder
-                .WithOrigins(
-                    "http://localhost:5173",  // Vite development server
-                    "http://localhost:3000",  // React standard port
-                    "https://excelly-lms-f3500.web.app"  // Production
-                )
-                .AllowAnyMethod()
-                .AllowAnyHeader()
-                .AllowCredentials();
-        });
+    options.AddPolicy("AllowReactApp", policyBuilder =>
+    {
+        policyBuilder
+            .WithOrigins(
+                "http://localhost:5173",  // Vite development server
+                "http://localhost:3000",  // React standard port
+                "https://excelly-lms-f3500.web.app"  // Production
+            )
+            .AllowAnyMethod()
+            .AllowAnyHeader()
+            .AllowCredentials();
+    });
 });
 
-// --- Enhanced Firebase Admin Configuration ---
-if (FirebaseApp.DefaultInstance == null)
-{
-    try
-    {
-        var serviceAccountKeyPath = builder.Configuration["Firebase:ServiceAccountKeyPath"];
-        if (string.IsNullOrEmpty(serviceAccountKeyPath))
-        {
-            serviceAccountKeyPath = Path.Combine(AppContext.BaseDirectory, "firebase-service-account.json");
-            if (!System.IO.File.Exists(serviceAccountKeyPath) && !string.IsNullOrEmpty(builder.Environment.ContentRootPath))
-            {
-                serviceAccountKeyPath = Path.Combine(builder.Environment.ContentRootPath, "firebase-service-account.json");
-            }
-        }
+// === FIREBASE CONFIGURATION ===
+ConfigureFirebase(builder);
 
-        Console.WriteLine($"Attempting to use service account key at: {serviceAccountKeyPath}");
+// === JWT AUTHENTICATION CONFIGURATION ===
+ConfigureJwtAuthentication(builder);
 
-        if (!System.IO.File.Exists(serviceAccountKeyPath))
-        {
-            throw new FileNotFoundException($"Firebase service account file not found at the resolved path: {serviceAccountKeyPath}. Ensure the file exists or the 'Firebase:ServiceAccountKeyPath' in appsettings.json is correct.");
-        }
-
-        // Initialize Firebase Admin with enhanced configuration
-        FirebaseApp.Create(new AppOptions
-        {
-            Credential = GoogleCredential.FromFile(serviceAccountKeyPath),
-            ProjectId = builder.Configuration["Firebase:ProjectId"] ?? "excelly-lms-f3500"
-        });
-
-        Console.WriteLine("Firebase Admin SDK initialized successfully.");
-
-        // Set up default application credentials for Google Cloud Storage
-        Environment.SetEnvironmentVariable("GOOGLE_APPLICATION_CREDENTIALS", serviceAccountKeyPath);
-        Console.WriteLine($"Set GOOGLE_APPLICATION_CREDENTIALS environment variable: {serviceAccountKeyPath}");
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"CRITICAL: Error initializing Firebase Admin: {ex.Message}");
-        if (ex.InnerException != null)
-        {
-            Console.WriteLine($"Inner exception: {ex.InnerException.Message}");
-        }
-
-        // Try to create a default Firebase app for development
-        if (builder.Environment.IsDevelopment())
-        {
-            try
-            {
-                FirebaseApp.Create(new AppOptions { ProjectId = "excelly-lms-f3500" });
-                Console.WriteLine("Created default Firebase app for development");
-            }
-            catch (Exception devEx)
-            {
-                Console.WriteLine($"Failed to create development Firebase app: {devEx.Message}");
-            }
-        }
-    }
-}
-
-
-// --- Setup JWT Authentication ---
-var jwtKey = builder.Configuration["Jwt:Secret"] ?? throw new InvalidOperationException("JWT Secret is not configured");
-var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "ExcellyGenLMS";
-var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "ExcellyGenLMS.Client";
-
-builder.Services.AddAuthentication(options =>
-{
-    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-})
-.AddJwtBearer(options =>
-{
-    options.TokenValidationParameters = new TokenValidationParameters
-    {
-        ValidateIssuer = true,
-        ValidateAudience = true,
-        ValidateLifetime = true,
-        ValidateIssuerSigningKey = true,
-        ValidIssuer = jwtIssuer,
-        ValidAudience = jwtAudience,
-        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
-        ClockSkew = TimeSpan.Zero
-    };
-
-    options.Events = new JwtBearerEvents
-    {
-        OnAuthenticationFailed = context =>
-        {
-            if (context.Exception.GetType() == typeof(SecurityTokenExpiredException))
-            {
-                context.Response.Headers["Token-Expired"] = "true";
-            }
-            Console.WriteLine($"JWT Authentication failed: {context.Exception.Message}");
-            return Task.CompletedTask;
-        }
-    };
-});
-
-// --- Register IPasswordHasher ---
+// === PASSWORD HASHER ===
 builder.Services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
 
-// --- Register repositories ---
-// Auth repositories
-builder.Services.AddScoped<IUserRepository, UserRepository>();
-builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
+// === REPOSITORY REGISTRATIONS ===
+RegisterRepositories(builder.Services);
 
-// Admin repositories
-builder.Services.AddScoped<ITechnologyRepository, TechnologyRepository>();
-builder.Services.AddScoped<ICourseCategoryRepository, CourseCategoryRepository>();
-builder.Services.AddScoped<ICourseAdminRepository, CourseAdminRepository>();
+// === SERVICE REGISTRATIONS ===
+RegisterServices(builder.Services);
 
-// Course repositories - with correct implementation classes
-builder.Services.AddScoped<ICourseRepository, CourseRepository>();
-builder.Services.AddScoped<ILessonRepository, LessonRepository>();
-builder.Services.AddScoped<ICourseDocumentRepository, CourseDocumentRepository>();
-builder.Services.AddScoped<IEnrollmentRepository, EnrollmentRepository>();
-
-// Learner repositories
-builder.Services.AddScoped<IUserBadgeRepository, UserBadgeRepository>();
-builder.Services.AddScoped<IUserTechnologyRepository, UserTechnologyRepository>();
-builder.Services.AddScoped<IUserProjectRepository, UserProjectRepository>();
-builder.Services.AddScoped<IUserCertificationRepository, UserCertificationRepository>();
-builder.Services.AddScoped<IForumThreadRepository, ForumThreadRepository>();
-builder.Services.AddScoped<IThreadCommentRepository, ThreadCommentRepository>();
-builder.Services.AddScoped<IThreadComReplyRepository, ThreadComReplyRepository>();
-
-// ProjectManager repositories
-builder.Services.AddScoped<IProjectRepository, ProjectRepository>();
-builder.Services.AddScoped<IRoleRepository, RoleRepository>();
-
-// --- Register services ---
-// Auth services
-builder.Services.AddScoped<IUserService, UserService>();
-builder.Services.AddScoped<IAuthService, AuthService>();
-builder.Services.AddScoped<IFirebaseAuthService, FirebaseAuthService>();
-builder.Services.AddScoped<ITokenService, TokenService>();
-builder.Services.AddScoped<IEmailService, EmailService>();
-
-// Admin services
-builder.Services.AddScoped<IUserManagementService, UserManagementService>();
-builder.Services.AddScoped<ITechnologyService, TechnologyService>();
-builder.Services.AddScoped<ICourseCategoryService, CourseCategoryService>();
-builder.Services.AddScoped<ICourseAdminService, CourseAdminService>();
-builder.Services.AddScoped<IDashboardService, DashboardService>();
-
-// Add Analytics Service
-builder.Services.AddScoped<IAnalyticsService, AnalyticsService>();
-
-// Course services - with correct implementation class
-builder.Services.AddScoped<ICourseService, CourseService>();
-builder.Services.AddScoped<IEnrollmentService, EnrollmentService>();
-
-// File storage services - crucial for your Firebase implementation
-builder.Services.AddScoped<IFileStorageService, LocalFileStorageService>();
-builder.Services.AddScoped<IFileService, FileService>();
-
-// Learner services
-builder.Services.AddScoped<IUserBadgeService, UserBadgeService>();
-builder.Services.AddScoped<IUserTechnologyService, UserTechnologyService>();
-builder.Services.AddScoped<IUserProjectService, UserProjectService>();
-builder.Services.AddScoped<IUserCertificationService, UserCertificationService>();
-builder.Services.AddScoped<IUserProfileService, UserProfileService>();
-builder.Services.AddScoped<IForumService, ForumService>();
-
-// ProjectManager services
-builder.Services.AddScoped<ExcellyGenLMS.Application.Interfaces.ProjectManager.IProjectService, ExcellyGenLMS.Application.Services.ProjectManager.ProjectService>();
-builder.Services.AddScoped<ExcellyGenLMS.Application.Interfaces.ProjectManager.IRoleService, ExcellyGenLMS.Application.Services.ProjectManager.RoleService>();
-builder.Services.AddScoped<ExcellyGenLMS.Application.Interfaces.ProjectManager.IPMTechnologyService, ExcellyGenLMS.Application.Services.ProjectManager.PMTechnologyService>();
-
-// --- Required for accessing HttpContext ---
+// === CONTROLLERS AND SWAGGER ===
 builder.Services.AddHttpContextAccessor();
-
-// --- Add controllers with JSON enum serialization ---
 builder.Services.AddControllers()
+    // Explicitly add assemblies for where controllers reside
+    // Ensure all controller namespaces are added here
+    .AddApplicationPart(typeof(ExcellyGenLMS.API.Controllers.Admin.CourseCategoriesController).Assembly) // Example: Admin categories
+    .AddApplicationPart(typeof(ExcellyGenLMS.API.Controllers.Admin.DashboardController).Assembly) // Admin Dashboard
+    .AddApplicationPart(typeof(ExcellyGenLMS.API.Controllers.Course.CoursesController).Assembly) // Course management
+    .AddApplicationPart(typeof(ExcellyGenLMS.API.Controllers.Learner.LearnerStatsController).Assembly) // NEW: Learner Stats
+                                                                                                       // Continue adding other controller assemblies as needed (Auth, ProjectManager, other Learner/Admin/Course controllers)
     .AddJsonOptions(options =>
     {
         options.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
     });
 
-// --- Add Swagger ---
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(c =>
-{
-    c.SwaggerDoc("v1", new OpenApiInfo { Title = "ExcellyGenLMS API", Version = "v1" });
+ConfigureSwagger(builder.Services);
 
-    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
-    {
-        Description = "JWT Authorization header using the Bearer scheme. Example: \"Authorization: Bearer {token}\"",
-        Name = "Authorization",
-        In = ParameterLocation.Header,
-        Type = SecuritySchemeType.ApiKey,
-        Scheme = "Bearer"
-    });
-
-    c.AddSecurityRequirement(new OpenApiSecurityRequirement
-    {
-        {
-            new OpenApiSecurityScheme
-            {
-                Reference = new OpenApiReference
-                {
-                    Type = ReferenceType.SecurityScheme,
-                    Id = "Bearer"
-                }
-            },
-            Array.Empty<string>()
-        }
-    });
-
-    // FIX for Schema ID collision: Use full type name for schema IDs.
-    c.CustomSchemaIds(type => type.FullName?.Replace("+", "."));
-});
-
-// --- Build the Application ---
+// === BUILD APPLICATION ===
 var app = builder.Build();
 
-// --- Configure the HTTP request pipeline ---
-if (app.Environment.IsDevelopment())
-{
-    app.UseDeveloperExceptionPage();
-    app.UseSwagger();
-    app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "ExcellyGenLMS API v1"));
-}
-else
-{
-    app.UseExceptionHandler("/error"); // Consider adding a real error handling endpoint
-    app.UseHsts();
-}
+// === CONFIGURE HTTP PIPELINE ===
+ConfigureHttpPipeline(app, builder);
 
-app.UseHttpsRedirection();
+// === RUN THE APPLICATION ===
+app.Run();
 
-// --- Ensure wwwroot directory exists and configure static files ---
-var webRootPath = Path.Combine(builder.Environment.ContentRootPath, "wwwroot");
-if (!Directory.Exists(webRootPath))
+// === HELPER METHODS ===
+
+static void ConfigureFirebase(WebApplicationBuilder builder)
 {
-    try
+    if (FirebaseApp.DefaultInstance == null)
     {
-        Directory.CreateDirectory(webRootPath);
-        Console.WriteLine($"Created wwwroot directory at: {webRootPath}");
+        try
+        {
+            var serviceAccountKeyPath = builder.Configuration["Firebase:ServiceAccountKeyPath"];
+            if (string.IsNullOrEmpty(serviceAccountKeyPath))
+            {
+                serviceAccountKeyPath = Path.Combine(AppContext.BaseDirectory, "firebase-service-account.json");
+                if (!File.Exists(serviceAccountKeyPath) && !string.IsNullOrEmpty(builder.Environment.ContentRootPath))
+                {
+                    serviceAccountKeyPath = Path.Combine(builder.Environment.ContentRootPath, "firebase-service-account.json");
+                }
+            }
 
-        var uploadsPath = Path.Combine(webRootPath, "uploads");
-        Directory.CreateDirectory(uploadsPath);
+            Console.WriteLine($"Attempting to use service account key at: {serviceAccountKeyPath}");
 
-        Directory.CreateDirectory(Path.Combine(uploadsPath, "avatars"));
-        Directory.CreateDirectory(Path.Combine(uploadsPath, "badges"));
-        Directory.CreateDirectory(Path.Combine(uploadsPath, "certifications"));
-        Directory.CreateDirectory(Path.Combine(uploadsPath, "forum")); // Optional forum image folder
+            if (!File.Exists(serviceAccountKeyPath))
+            {
+                throw new FileNotFoundException($"Firebase service account file not found at: {serviceAccountKeyPath}");
+            }
 
-        Console.WriteLine("Created upload subdirectories");
+            FirebaseApp.Create(new AppOptions
+            {
+                Credential = GoogleCredential.FromFile(serviceAccountKeyPath),
+                ProjectId = builder.Configuration["Firebase:ProjectId"] ?? "excelly-lms-f3500"
+            });
+
+            Environment.SetEnvironmentVariable("GOOGLE_APPLICATION_CREDENTIALS", serviceAccountKeyPath);
+            Console.WriteLine("Firebase Admin SDK initialized successfully.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error initializing Firebase Admin: {ex.Message}");
+
+            if (builder.Environment.IsDevelopment())
+            {
+                try
+                {
+                    FirebaseApp.Create(new AppOptions { ProjectId = "excelly-lms-f3500" });
+                    Console.WriteLine("Created default Firebase app for development");
+                }
+                catch (Exception devEx)
+                {
+                    Console.WriteLine($"Failed to create development Firebase app: {devEx.Message}");
+                }
+            }
+        }
     }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"Error creating wwwroot subdirectories: {ex.Message}");
-    }
 }
 
-// Set up static file serving for both wwwroot and any custom file paths
-string fileStoragePath = builder.Configuration.GetValue<string>("FileStorage:LocalPath") ??
-    Path.Combine(builder.Environment.ContentRootPath, "uploads");
-
-if (!Directory.Exists(fileStoragePath))
+static void ConfigureJwtAuthentication(WebApplicationBuilder builder)
 {
-    try
-    {
-        Directory.CreateDirectory(fileStoragePath);
-        Console.WriteLine($"Created file storage directory: {fileStoragePath}");
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"Failed to create file storage directory: {fileStoragePath}, Error: {ex.Message}");
-    }
-}
+    var jwtKey = builder.Configuration["Jwt:Secret"] ??
+        throw new InvalidOperationException("JWT Secret is not configured");
+    var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "ExcellyGenLMS";
+    var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "ExcellyGenLMS.Client";
 
-app.UseStaticFiles(new StaticFileOptions
-{
-    FileProvider = new PhysicalFileProvider(webRootPath),
-    RequestPath = ""
-});
-
-// If uploads directory is outside wwwroot, configure it separately
-var fullFileStoragePath = Path.GetFullPath(fileStoragePath);
-var fullWwwRootPath = Path.GetFullPath(webRootPath);
-
-if (!fullFileStoragePath.StartsWith(fullWwwRootPath, StringComparison.OrdinalIgnoreCase))
-{
-    Console.WriteLine($"Configuring static files from custom path: {fileStoragePath} mapped to /uploads");
-    app.UseStaticFiles(new StaticFileOptions
+    builder.Services.AddAuthentication(options =>
     {
-        FileProvider = new PhysicalFileProvider(fileStoragePath),
-        RequestPath = "/uploads"
+        options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+        options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+    })
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = jwtIssuer,
+            ValidAudience = jwtAudience,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
+            ClockSkew = TimeSpan.Zero
+        };
+
+        options.Events = new JwtBearerEvents
+        {
+            OnAuthenticationFailed = context =>
+            {
+                if (context.Exception.GetType() == typeof(SecurityTokenExpiredException))
+                {
+                    context.Response.Headers["Token-Expired"] = "true";
+                }
+                Console.WriteLine($"JWT Authentication failed: {context.Exception.Message}");
+                return Task.CompletedTask;
+            }
+        };
     });
 }
 
-// --- Apply Middleware ---
-app.UseCors("AllowReactApp");
+static void RegisterRepositories(IServiceCollection services)
+{
+    // Auth Repositories
+    services.AddScoped<IUserRepository, UserRepository>();
+    services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
 
-app.UseAuthentication();
-app.UseAuthorization();
+    // Admin Repositories
+    services.AddScoped<ITechnologyRepository, TechnologyRepository>();
+    services.AddScoped<ICourseCategoryRepository, CourseCategoryRepository>();
+    services.AddScoped<ICourseAdminRepository, CourseAdminRepository>();
 
-app.UseRoleAuthorization(); // Your custom role check middleware
+    // Course Repositories
+    services.AddScoped<ICourseRepository, CourseRepository>();
+    services.AddScoped<ILessonRepository, LessonRepository>();
+    services.AddScoped<ICourseDocumentRepository, CourseDocumentRepository>();
+    services.AddScoped<IEnrollmentRepository, EnrollmentRepository>();
+    services.AddScoped<ILessonProgressRepository, LessonProgressRepository>();
+    services.AddScoped<ICertificateRepository, CertificateRepository>();
 
-app.MapControllers();
+    // Quiz Repositories
+    services.AddScoped<IQuizRepository, QuizRepository>();
+    services.AddScoped<IQuizAttemptRepository, QuizAttemptRepository>();
 
-// --- Run the Application ---
-app.Run();
+    // Learner Repositories
+    services.AddScoped<IUserBadgeRepository, UserBadgeRepository>();
+    services.AddScoped<IUserTechnologyRepository, UserTechnologyRepository>();
+    services.AddScoped<IUserProjectRepository, UserProjectRepository>();
+    services.AddScoped<IUserCertificationRepository, UserCertificationRepository>();
+    services.AddScoped<IForumThreadRepository, ForumThreadRepository>();
+    services.AddScoped<IThreadCommentRepository, ThreadCommentRepository>();
+    services.AddScoped<IThreadComReplyRepository, ThreadComReplyRepository>();
+
+    // Project Manager Repositories
+    services.AddScoped<IProjectRepository, ProjectRepository>();
+    services.AddScoped<IRoleRepository, RoleRepository>();
+}
+
+static void RegisterServices(IServiceCollection services)
+{
+    // Auth Services
+    services.AddScoped<IUserService, UserService>();
+    services.AddScoped<IAuthService, AuthService>();
+    services.AddScoped<IFirebaseAuthService, FirebaseAuthService>();
+    services.AddScoped<ITokenService, TokenService>();
+    services.AddScoped<IEmailService, EmailService>();
+
+    // Admin Services
+    services.AddScoped<IUserManagementService, UserManagementService>();
+    services.AddScoped<ITechnologyService, TechnologyService>();
+    services.AddScoped<ICourseCategoryService, CourseCategoryService>();
+    services.AddScoped<ICourseAdminService, CourseAdminService>();
+    services.AddScoped<IDashboardService, DashboardService>();
+    services.AddScoped<IAnalyticsService, AnalyticsService>();
+
+    // File Storage Services
+    services.AddScoped<IFileStorageService, LocalFileStorageService>();
+    services.AddScoped<IFileService, FileService>();
+
+    // Course Services
+    services.AddScoped<ICourseService, CourseService>();
+    services.AddScoped<IEnrollmentService, EnrollmentService>();
+    services.AddScoped<ILearnerCourseService, LearnerCourseService>();
+    services.AddScoped<ICertificateService, CertificateService>();
+
+    // Quiz Services
+    services.AddScoped<IQuizService, QuizService>();
+    services.AddScoped<IQuizAttemptService, QuizAttemptService>();
+
+    // Learner Services
+    services.AddScoped<IUserBadgeService, UserBadgeService>();
+    services.AddScoped<IUserTechnologyService, UserTechnologyService>();
+    services.AddScoped<IUserProjectService, UserProjectService>();
+    services.AddScoped<IUserCertificationService, UserCertificationService>();
+    services.AddScoped<IUserProfileService, UserProfileService>();
+    services.AddScoped<IForumService, ForumService>();
+    // NEW: Learner Stats Service
+    services.AddScoped<ExcellyGenLMS.Application.Interfaces.Learner.ILearnerStatsService, ExcellyGenLMS.Application.Services.Learner.LearnerStatsService>();
+
+
+    // Project Manager Services
+    services.AddScoped<ExcellyGenLMS.Application.Interfaces.ProjectManager.IProjectService,
+        ExcellyGenLMS.Application.Services.ProjectManager.ProjectService>();
+    services.AddScoped<ExcellyGenLMS.Application.Interfaces.ProjectManager.IRoleService,
+        ExcellyGenLMS.Application.Services.ProjectManager.RoleService>();
+    services.AddScoped<ExcellyGenLMS.Application.Interfaces.ProjectManager.IPMTechnologyService,
+        ExcellyGenLMS.Application.Services.ProjectManager.PMTechnologyService>();
+}
+
+static void ConfigureSwagger(IServiceCollection services)
+{
+    services.AddSwaggerGen(c =>
+    {
+        c.SwaggerDoc("v1", new OpenApiInfo
+        {
+            Title = "ExcellyGenLMS API",
+            Version = "v1",
+            Description = "Learning Management System API"
+        });
+
+        c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+        {
+            Description = "JWT Authorization header using the Bearer scheme. Example: \"Authorization: Bearer {token}\"",
+            Name = "Authorization",
+            In = ParameterLocation.Header,
+            Type = SecuritySchemeType.ApiKey,
+            Scheme = "Bearer"
+        });
+
+        c.AddSecurityRequirement(new OpenApiSecurityRequirement
+        {
+            {
+                new OpenApiSecurityScheme
+                {
+                    Reference = new OpenApiReference
+                    {
+                        Type = ReferenceType.SecurityScheme,
+                        Id = "Bearer"
+                    }
+                },
+                Array.Empty<string>()
+            }
+        });
+
+        c.CustomSchemaIds(type => type.FullName?.Replace("+", "."));
+    });
+}
+
+static void ConfigureHttpPipeline(WebApplication app, WebApplicationBuilder builder)
+{
+    // === DEVELOPMENT/PRODUCTION PIPELINE CONFIGURATION ===
+    if (app.Environment.IsDevelopment())
+    {
+        app.UseDeveloperExceptionPage();
+        app.UseSwagger();
+        app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "ExcellyGenLMS API v1"));
+    }
+    else
+    {
+        app.UseExceptionHandler("/error");
+        app.UseHsts();
+    }
+
+    app.UseHttpsRedirection();
+
+    // === STATIC FILES CONFIGURATION ===
+    ConfigureStaticFiles(app, builder);
+
+    // === MIDDLEWARE PIPELINE ===
+    app.UseCors("AllowReactApp");
+    app.UseAuthentication();
+    app.UseAuthorization();
+    app.UseRoleAuthorization(); // Your custom role check middleware
+    app.MapControllers();
+}
+
+static void ConfigureStaticFiles(WebApplication app, WebApplicationBuilder builder)
+{
+    var webRootPath = Path.Combine(builder.Environment.ContentRootPath, "wwwroot");
+    if (!Directory.Exists(webRootPath))
+    {
+        try
+        {
+            Directory.CreateDirectory(webRootPath);
+            Console.WriteLine($"Created wwwroot directory at: {webRootPath}");
+
+            var uploadsPath = Path.Combine(webRootPath, "uploads");
+            Directory.CreateDirectory(uploadsPath);
+            Directory.CreateDirectory(Path.Combine(uploadsPath, "avatars"));
+            Directory.CreateDirectory(Path.Combine(uploadsPath, "badges"));
+            Directory.CreateDirectory(Path.Combine(uploadsPath, "certifications"));
+            Directory.CreateDirectory(Path.Combine(uploadsPath, "forum"));
+
+            Console.WriteLine("Created upload subdirectories");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error creating wwwroot subdirectories: {ex.Message}");
+        }
+    }
+
+    string fileStoragePath = builder.Configuration.GetValue<string>("FileStorage:LocalPath") ??
+        Path.Combine(builder.Environment.ContentRootPath, "uploads");
+
+    if (!Directory.Exists(fileStoragePath))
+    {
+        try
+        {
+            Directory.CreateDirectory(fileStoragePath);
+            Console.WriteLine($"Created file storage directory: {fileStoragePath}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to create file storage directory: {fileStoragePath}, Error: {ex.Message}");
+        }
+    }
+
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = new PhysicalFileProvider(webRootPath),
+        RequestPath = ""
+    });
+
+    var fullFileStoragePath = Path.GetFullPath(fileStoragePath);
+    var fullWwwRootPath = Path.GetFullPath(webRootPath);
+
+    if (!fullFileStoragePath.StartsWith(fullWwwRootPath, StringComparison.OrdinalIgnoreCase))
+    {
+        Console.WriteLine($"Configuring static files from custom path: {fileStoragePath} mapped to /uploads");
+        app.UseStaticFiles(new StaticFileOptions
+        {
+            FileProvider = new PhysicalFileProvider(fileStoragePath),
+            RequestPath = "/uploads"
+        });
+    }
+}
