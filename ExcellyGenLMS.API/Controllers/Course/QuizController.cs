@@ -242,12 +242,14 @@ namespace ExcellyGenLMS.API.Controllers.Course
             }
         }
 
+        // MODIFIED: Improved error handling for UpdateQuestion
         [HttpPut("question/{questionId}")]
         [Authorize(Roles = "Admin,CourseCoordinator")]
         public async Task<ActionResult> UpdateQuestion(int questionId, [FromBody] UpdateQuizBankQuestionDto updateQuestionDto)
         {
             try
             {
+                _logger.LogInformation($"Processing update request for question {questionId}");
                 await _quizService.UpdateQuizBankQuestionAsync(questionId, updateQuestionDto);
                 return NoContent();
             }
