@@ -271,39 +271,97 @@ namespace ExcellyGenLMS.Application.Services.Course
             return MapQuestionToDto(refreshedQuestion!);
         }
 
+        // MODIFIED: Update question logic to handle existing quiz attempts
         public async Task UpdateQuizBankQuestionAsync(int questionId, UpdateQuizBankQuestionDto updateQuestionDto)
         {
-            var question = await _quizRepository.GetQuizBankQuestionByIdAsync(questionId);
-            if (question == null)
-                throw new ArgumentException($"Question with ID {questionId} not found.");
-
-            if (!string.IsNullOrEmpty(updateQuestionDto.QuestionContent))
-                question.QuestionContent = updateQuestionDto.QuestionContent;
-
-            if (updateQuestionDto.QuestionBankOrder.HasValue)
-                question.QuestionBankOrder = updateQuestionDto.QuestionBankOrder;
-
-            await _quizRepository.UpdateQuizBankQuestionAsync(question);
-
-            if (updateQuestionDto.Options != null && updateQuestionDto.Options.Any())
+            try
             {
-                var existingOptions = await _quizRepository.GetOptionsForQuestionAsync(questionId);
-                foreach (var option in existingOptions)
-                {
-                    await _quizRepository.DeleteOptionAsync(option.McqOptionId);
-                }
+                _logger.LogInformation($"Updating quiz bank question {questionId}");
 
-                foreach (var optionDto in updateQuestionDto.Options)
+                var question = await _quizRepository.GetQuizBankQuestionByIdAsync(questionId);
+                if (question == null)
+                    throw new ArgumentException($"Question with ID {questionId} not found.");
+
+                // Update the question properties
+                if (!string.IsNullOrEmpty(updateQuestionDto.QuestionContent))
+                    question.QuestionContent = updateQuestionDto.QuestionContent;
+
+                if (updateQuestionDto.QuestionBankOrder.HasValue)
+                    question.QuestionBankOrder = updateQuestionDto.QuestionBankOrder;
+
+                await _quizRepository.UpdateQuizBankQuestionAsync(question);
+
+                // Only process options if they're provided in the DTO
+                if (updateQuestionDto.Options != null && updateQuestionDto.Options.Any())
                 {
-                    var optionEntity = new MCQQuestionOption
+                    _logger.LogInformation($"Processing {updateQuestionDto.Options.Count} options for question {questionId}");
+
+                    // Get existing options
+                    var existingOptions = (await _quizRepository.GetOptionsForQuestionAsync(questionId)).ToList();
+                    _logger.LogInformation($"Found {existingOptions.Count} existing options for question {questionId}");
+
+                    // Track options that should be preserved (used in attempts)
+                    var optionsInUse = new List<int>();
+
+                    // Try to delete each existing option - but we'll check if they're in use first
+                    foreach (var option in existingOptions)
                     {
-                        QuizBankQuestionId = questionId,
-                        OptionText = optionDto.OptionText,
-                        IsCorrect = optionDto.IsCorrect
-                    };
+                        // Check if option is used in any quiz attempts
+                        bool isUsed = await _quizRepository.IsOptionUsedInAttemptsAsync(option.McqOptionId);
 
-                    await _quizRepository.AddOptionToQuestionAsync(optionEntity);
+                        if (isUsed)
+                        {
+                            // Option is in use and can't be deleted
+                            optionsInUse.Add(option.McqOptionId);
+                            _logger.LogInformation($"Option {option.McqOptionId} is in use and will be preserved/updated");
+                        }
+                        else
+                        {
+                            // Option is not in use, try to delete it
+                            await _quizRepository.DeleteOptionAsync(option.McqOptionId);
+                            _logger.LogInformation($"Option {option.McqOptionId} was deleted successfully");
+                        }
+                    }
+
+                    // Handle updating existing options that are in use and creating new ones
+                    int optionIndex = 0;
+                    foreach (var optionDto in updateQuestionDto.Options)
+                    {
+                        if (optionIndex < optionsInUse.Count)
+                        {
+                            // Update an existing option that couldn't be deleted
+                            int optionId = optionsInUse[optionIndex];
+                            var optionToUpdate = await _quizRepository.GetMCQOptionByIdAsync(optionId);
+                            if (optionToUpdate != null)
+                            {
+                                optionToUpdate.OptionText = optionDto.OptionText;
+                                optionToUpdate.IsCorrect = optionDto.IsCorrect;
+                                await _quizRepository.UpdateOptionAsync(optionToUpdate);
+                                _logger.LogInformation($"Updated existing option {optionId}");
+                            }
+                        }
+                        else
+                        {
+                            // Create a new option
+                            var newOption = new MCQQuestionOption
+                            {
+                                QuizBankQuestionId = questionId,
+                                OptionText = optionDto.OptionText,
+                                IsCorrect = optionDto.IsCorrect
+                            };
+                            await _quizRepository.AddOptionToQuestionAsync(newOption);
+                            _logger.LogInformation($"Added new option for question {questionId}");
+                        }
+                        optionIndex++;
+                    }
                 }
+
+                _logger.LogInformation($"Successfully updated question {questionId}");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error updating question {questionId}");
+                throw;
             }
         }
 

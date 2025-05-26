@@ -29,15 +29,16 @@ namespace ExcellyGenLMS.Core.Interfaces.Repositories.Course
         Task<QuizBankQuestion> AddQuestionToQuizBankAsync(QuizBankQuestion question);
         Task UpdateQuizBankQuestionAsync(QuizBankQuestion question);
         Task DeleteQuizBankQuestionAsync(int questionId);
+        Task<IEnumerable<QuizBankQuestion>> GetRandomQuestionsForQuizAsync(int quizId, int count);
 
-        // Option operations
+        // MCQ Option operations
         Task<MCQQuestionOption?> GetMCQOptionByIdAsync(int optionId);
         Task<IEnumerable<MCQQuestionOption>> GetOptionsForQuestionAsync(int questionId);
         Task AddOptionToQuestionAsync(MCQQuestionOption option);
         Task UpdateOptionAsync(MCQQuestionOption option);
         Task DeleteOptionAsync(int optionId);
 
-        // Learner quiz operations
-        Task<IEnumerable<QuizBankQuestion>> GetRandomQuestionsForQuizAsync(int quizId, int count);
+        // NEW: Added this method to check if an option is used in any quiz attempts
+        Task<bool> IsOptionUsedInAttemptsAsync(int optionId);
     }
 }

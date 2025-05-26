@@ -156,8 +156,6 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
             return question;
         }
 
-
-
         public async Task UpdateQuizBankQuestionAsync(QuizBankQuestion question)
         {
             _context.Entry(question).State = EntityState.Modified;
@@ -202,17 +200,43 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
             await _context.SaveChangesAsync();
         }
 
+        // Check if an option is used in any quiz attempts
+        public async Task<bool> IsOptionUsedInAttemptsAsync(int optionId)
+        {
+            return await _context.QuizAttemptAnswers
+                                .AnyAsync(qaa => qaa.SelectedOptionId == optionId);
+        }
+
+        // Modified to match the interface return type (Task instead of Task<bool>)
         public async Task DeleteOptionAsync(int optionId)
         {
-            var option = await _context.MCQQuestionOptions.FindAsync(optionId);
-            if (option != null)
+            try
             {
-                _context.MCQQuestionOptions.Remove(option);
-                await _context.SaveChangesAsync();
+                var option = await _context.MCQQuestionOptions.FindAsync(optionId);
+                if (option != null)
+                {
+                    // Check if the option is used in any quiz attempts
+                    bool isUsed = await IsOptionUsedInAttemptsAsync(optionId);
+
+                    if (!isUsed)
+                    {
+                        // Safe to delete
+                        _context.MCQQuestionOptions.Remove(option);
+                        await _context.SaveChangesAsync();
+                    }
+                    // If it's in use, just silently don't delete it
+                    // This prevents the foreign key constraint error
+                }
+                else
+                {
+                    throw new ArgumentException($"Option with ID {optionId} not found for deletion.");
+                }
             }
-            else
+            catch (DbUpdateException ex) when (ex.InnerException?.Message.Contains("REFERENCE constraint") == true)
             {
-                throw new ArgumentException($"Option with ID {optionId} not found for deletion.");
+                // Catch and handle constraint violation gracefully - this is a fallback
+                // We shouldn't reach here if IsOptionUsedInAttemptsAsync works correctly
+                Console.WriteLine($"Cannot delete option {optionId} because it's referenced in quiz attempts");
             }
         }
 
