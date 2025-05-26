@@ -7,36 +7,37 @@ namespace ExcellyGenLMS.Core.Interfaces.Repositories.Course
 {
     public interface IQuizRepository
     {
-        // Quiz management
+        // Quiz operations
         Task<Quiz?> GetQuizByIdAsync(int quizId);
         Task<IEnumerable<Quiz>> GetQuizzesByLessonIdAsync(int lessonId);
-        Task<Quiz?> GetQuizByLessonIdAsync(int lessonId); // Previously Added (single quiz for a lesson)
-        Task<IEnumerable<Quiz>> GetQuizzesByLessonIdsAsync(List<int> lessonIds); // Previously Added (multiple quizzes by lesson IDs)
-        Task<bool> HasQuizForLessonAsync(int lessonId); // Previously Added
+        Task<Quiz?> GetQuizByLessonIdAsync(int lessonId);
+        Task<IEnumerable<Quiz>> GetQuizzesByLessonIdsAsync(List<int> lessonIds);
         Task<Quiz> CreateQuizAsync(Quiz quiz);
         Task UpdateQuizAsync(Quiz quiz);
         Task DeleteQuizAsync(int quizId);
+        Task<bool> HasQuizForLessonAsync(int lessonId);
 
         // Quiz Bank operations
         Task<QuizBank?> GetQuizBankByIdAsync(int quizBankId);
         Task<QuizBank> CreateQuizBankAsync(QuizBank quizBank);
+        Task UpdateQuizBankAsync(QuizBank quizBank);
         Task<QuizBank> GetOrCreateQuizBankForLessonAsync(int lessonId);
 
-        // Quiz Bank Question operations
+        // Question operations
         Task<QuizBankQuestion?> GetQuizBankQuestionByIdAsync(int questionId);
         Task<IEnumerable<QuizBankQuestion>> GetQuestionsForQuizBankAsync(int quizBankId);
         Task<QuizBankQuestion> AddQuestionToQuizBankAsync(QuizBankQuestion question);
         Task UpdateQuizBankQuestionAsync(QuizBankQuestion question);
         Task DeleteQuizBankQuestionAsync(int questionId);
 
-        // MCQ Option operations
+        // Option operations
         Task<MCQQuestionOption?> GetMCQOptionByIdAsync(int optionId);
         Task<IEnumerable<MCQQuestionOption>> GetOptionsForQuestionAsync(int questionId);
         Task AddOptionToQuestionAsync(MCQQuestionOption option);
         Task UpdateOptionAsync(MCQQuestionOption option);
         Task DeleteOptionAsync(int optionId);
 
-        // Random question selection for quiz attempts
+        // Learner quiz operations
         Task<IEnumerable<QuizBankQuestion>> GetRandomQuestionsForQuizAsync(int quizId, int count);
     }
 }
