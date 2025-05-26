@@ -76,15 +76,15 @@ try
     ConfigureMiddlewarePipeline(app);
 
     // ===== START APPLICATION =====
-    Console.WriteLine("🚀 ExcellyGenLMS API is starting...");
-    Console.WriteLine($"🌍 Environment: {app.Environment.EnvironmentName}");
-    Console.WriteLine($"📍 URLs: {string.Join(", ", app.Urls)}");
+    Console.WriteLine("ExcellyGenLMS API is starting...");
+    Console.WriteLine($"Environment: {app.Environment.EnvironmentName}");
+    Console.WriteLine($"URLs: {string.Join(", ", app.Urls)}");
 
     app.Run();
 }
 catch (Exception ex)
 {
-    Console.WriteLine($"❌ Application failed to start: {ex.Message}");
+    Console.WriteLine($"Application failed to start: {ex.Message}");
     throw;
 }
 
@@ -107,7 +107,7 @@ static void ConfigureDatabase(WebApplicationBuilder builder)
     builder.Services.AddTransient<IDbConnection>(sp =>
         new SqlConnection(connectionString));
 
-    Console.WriteLine("✅ Database configuration completed");
+    Console.WriteLine("Database configuration completed");
 }
 
 static void ConfigureCors(WebApplicationBuilder builder)
@@ -127,7 +127,7 @@ static void ConfigureCors(WebApplicationBuilder builder)
         });
     });
 
-    Console.WriteLine("✅ CORS configuration completed");
+    Console.WriteLine("CORS configuration completed");
 }
 
 static void ConfigureAuthentication(WebApplicationBuilder builder)
@@ -164,7 +164,7 @@ static void ConfigureAuthentication(WebApplicationBuilder builder)
                 {
                     context.Response.Headers["Token-Expired"] = "true";
                 }
-                Console.WriteLine($"🔒 JWT Authentication failed: {context.Exception.Message}");
+                Console.WriteLine($"JWT Authentication failed: {context.Exception.Message}");
                 return Task.CompletedTask;
             }
         };
@@ -173,14 +173,14 @@ static void ConfigureAuthentication(WebApplicationBuilder builder)
     builder.Services.AddAuthorization();
     builder.Services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
 
-    Console.WriteLine("✅ Authentication configuration completed");
+    Console.WriteLine("Authentication configuration completed");
 }
 
 static void ConfigureFirebase(WebApplicationBuilder builder)
 {
     if (FirebaseApp.DefaultInstance != null)
     {
-        Console.WriteLine("⚠️ Firebase already initialized");
+        Console.WriteLine("Firebase already initialized");
         return;
     }
 
@@ -199,7 +199,7 @@ static void ConfigureFirebase(WebApplicationBuilder builder)
             });
 
             Environment.SetEnvironmentVariable("GOOGLE_APPLICATION_CREDENTIALS", serviceAccountKeyPath);
-            Console.WriteLine($"✅ Firebase initialized with project: {projectId}");
+            Console.WriteLine($"Firebase initialized with project: {projectId}");
         }
         else
         {
@@ -208,18 +208,18 @@ static void ConfigureFirebase(WebApplicationBuilder builder)
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"❌ Firebase initialization failed: {ex.Message}");
+        Console.WriteLine($"Firebase initialization failed: {ex.Message}");
 
         if (builder.Environment.IsDevelopment())
         {
             try
             {
                 FirebaseApp.Create(new AppOptions { ProjectId = "excelly-lms-f3500" });
-                Console.WriteLine("⚠️ Using default Firebase configuration for development");
+                Console.WriteLine("Using default Firebase configuration for development");
             }
             catch (Exception devEx)
             {
-                Console.WriteLine($"❌ Development Firebase setup failed: {devEx.Message}");
+                Console.WriteLine($"Development Firebase setup failed: {devEx.Message}");
             }
         }
         else
@@ -259,7 +259,7 @@ static void ConfigureControllers(WebApplicationBuilder builder)
 
     builder.Services.AddEndpointsApiExplorer();
 
-    Console.WriteLine("✅ Controllers configuration completed");
+    Console.WriteLine("Controllers configuration completed");
 }
 
 static void ConfigureSwagger(WebApplicationBuilder builder)
@@ -305,7 +305,7 @@ static void ConfigureSwagger(WebApplicationBuilder builder)
         options.CustomSchemaIds(type => type.FullName?.Replace("+", "."));
     });
 
-    Console.WriteLine("✅ Swagger configuration completed");
+    Console.WriteLine("Swagger configuration completed");
 }
 
 static void RegisterRepositories(IServiceCollection services)
@@ -344,7 +344,7 @@ static void RegisterRepositories(IServiceCollection services)
     services.AddScoped<IProjectRepository, ProjectRepository>();
     services.AddScoped<IRoleRepository, RoleRepository>();
 
-    Console.WriteLine("✅ Repository registrations completed");
+    Console.WriteLine("Repository registrations completed");
 }
 
 static void RegisterApplicationServices(IServiceCollection services)
@@ -396,7 +396,7 @@ static void RegisterApplicationServices(IServiceCollection services)
     services.AddScoped<ExcellyGenLMS.Application.Interfaces.ProjectManager.IPMTechnologyService,
         ExcellyGenLMS.Application.Services.ProjectManager.PMTechnologyService>();
 
-    Console.WriteLine("✅ Application services registration completed");
+    Console.WriteLine("Application services registration completed");
 }
 
 static void ConfigureMiddlewarePipeline(WebApplication app)
@@ -412,13 +412,13 @@ static void ConfigureMiddlewarePipeline(WebApplication app)
             options.RoutePrefix = "swagger";
             options.DocumentTitle = "ExcellyGenLMS API Documentation";
         });
-        Console.WriteLine("🔧 Development middleware configured");
+        Console.WriteLine("Development middleware configured");
     }
     else
     {
         app.UseExceptionHandler("/error");
         app.UseHsts();
-        Console.WriteLine("🔧 Production middleware configured");
+        Console.WriteLine("Production middleware configured");
     }
 
     // Core Middleware Pipeline
@@ -430,7 +430,7 @@ static void ConfigureMiddlewarePipeline(WebApplication app)
     app.UseRoleAuthorization(); // Custom middleware
     app.MapControllers();
 
-    Console.WriteLine("✅ Middleware pipeline configured");
+    Console.WriteLine("Middleware pipeline configured");
 }
 
 static void ConfigureStaticFiles(WebApplication app)
@@ -465,10 +465,10 @@ static void ConfigureStaticFiles(WebApplication app)
             FileProvider = new PhysicalFileProvider(fileStoragePath),
             RequestPath = "/uploads"
         });
-        Console.WriteLine($"📁 Custom file storage configured: {fileStoragePath}");
+        Console.WriteLine($"Custom file storage configured: {fileStoragePath}");
     }
 
-    Console.WriteLine("✅ Static files configuration completed");
+    Console.WriteLine("Static files configuration completed");
 }
 
 static void EnsureDirectoryExists(string path)
@@ -478,11 +478,11 @@ static void EnsureDirectoryExists(string path)
         try
         {
             Directory.CreateDirectory(path);
-            Console.WriteLine($"📁 Created directory: {path}");
+            Console.WriteLine($"Created directory: {path}");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"❌ Failed to create directory {path}: {ex.Message}");
+            Console.WriteLine($"Failed to create directory {path}: {ex.Message}");
         }
     }
 }

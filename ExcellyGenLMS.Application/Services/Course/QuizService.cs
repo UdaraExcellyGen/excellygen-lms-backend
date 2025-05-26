@@ -1,5 +1,4 @@
-// ExcellyGenLMS.Application/Services/Course/QuizService.cs
-// This file belongs to the ExcellyGenLMS.Application project.
+﻿// ExcellyGenLMS.Application/Services/Course/QuizService.cs
 using ExcellyGenLMS.Application.DTOs.Course;
 using ExcellyGenLMS.Application.Interfaces.Course;
 using ExcellyGenLMS.Core.Entities.Course;
@@ -10,12 +9,12 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace ExcellyGenLMS.Application.Services.Course // Correct namespace for Application project (Services layer)
+namespace ExcellyGenLMS.Application.Services.Course
 {
     public class QuizService : IQuizService
     {
         private readonly IQuizRepository _quizRepository;
-        private readonly ILessonRepository _lessonRepository; // Correctly referencing LessonRepository via interface
+        private readonly ILessonRepository _lessonRepository;
         private readonly ILogger<QuizService> _logger;
 
         public QuizService(
@@ -40,30 +39,47 @@ namespace ExcellyGenLMS.Application.Services.Course // Correct namespace for App
 
         public async Task<QuizDetailDto?> GetQuizDetailsAsync(int quizId)
         {
-            var quiz = await _quizRepository.GetQuizByIdAsync(quizId);
-            if (quiz == null)
-                return null;
-
-            var quizBank = await _quizRepository.GetQuizBankByIdAsync(quiz.QuizBankId);
-            if (quizBank == null)
-                return null;
-
-            var questions = await _quizRepository.GetQuestionsForQuizBankAsync(quiz.QuizBankId);
-
-            var quizDetailDto = new QuizDetailDto
+            try
             {
-                QuizId = quiz.QuizId,
-                QuizTitle = quiz.QuizTitle,
-                TimeLimitMinutes = quiz.TimeLimitMinutes,
-                TotalMarks = quiz.TotalMarks,
-                QuizSize = quiz.QuizSize,
-                QuizBankId = quiz.QuizBankId,
-                LessonId = quiz.LessonId,
-                LessonName = quiz.Lesson?.LessonName ?? "Unknown Lesson",
-                Questions = questions.Select(MapQuestionToDto).ToList()
-            };
+                _logger.LogInformation($"Getting quiz details for quiz ID: {quizId}");
 
-            return quizDetailDto;
+                var quiz = await _quizRepository.GetQuizByIdAsync(quizId);
+                if (quiz == null)
+                {
+                    _logger.LogWarning($"Quiz with ID {quizId} not found");
+                    return null;
+                }
+
+                var quizBank = await _quizRepository.GetQuizBankByIdAsync(quiz.QuizBankId);
+                if (quizBank == null)
+                {
+                    _logger.LogWarning($"Quiz bank with ID {quiz.QuizBankId} not found for quiz {quizId}");
+                    return null;
+                }
+
+                var questions = await _quizRepository.GetQuestionsForQuizBankAsync(quiz.QuizBankId);
+                _logger.LogInformation($"Found {questions.Count()} questions for quiz bank {quiz.QuizBankId}");
+
+                var quizDetailDto = new QuizDetailDto
+                {
+                    QuizId = quiz.QuizId,
+                    QuizTitle = quiz.QuizTitle,
+                    TimeLimitMinutes = quiz.TimeLimitMinutes,
+                    TotalMarks = quiz.TotalMarks,
+                    QuizSize = quiz.QuizSize,
+                    QuizBankId = quiz.QuizBankId,
+                    LessonId = quiz.LessonId,
+                    LessonName = quiz.Lesson?.LessonName ?? "Unknown Lesson",
+                    Questions = questions.Select(MapQuestionToDto).ToList()
+                };
+
+                return quizDetailDto;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error getting quiz details for quiz ID: {quizId}");
+                throw;
+            }
         }
 
         public async Task<IEnumerable<QuizDto>> GetQuizzesByLessonIdAsync(int lessonId)
@@ -74,24 +90,45 @@ namespace ExcellyGenLMS.Application.Services.Course // Correct namespace for App
 
         public async Task<QuizDto> CreateQuizAsync(CreateQuizDto createQuizDto)
         {
-            var lesson = await _lessonRepository.GetByIdAsync(createQuizDto.LessonId);
-            if (lesson == null)
-                throw new ArgumentException($"Lesson with ID {createQuizDto.LessonId} not found.");
-
-            var quizBank = await _quizRepository.GetOrCreateQuizBankForLessonAsync(createQuizDto.LessonId);
-
-            var quiz = new Quiz
+            try
             {
-                QuizTitle = createQuizDto.QuizTitle,
-                TimeLimitMinutes = createQuizDto.TimeLimitMinutes,
-                QuizSize = createQuizDto.QuizSize,
-                TotalMarks = createQuizDto.QuizSize, // Default: 1 mark per question
-                LessonId = createQuizDto.LessonId,
-                QuizBankId = quizBank.QuizBankId
-            };
+                _logger.LogInformation($"Creating quiz for lesson {createQuizDto.LessonId}");
 
-            var createdQuiz = await _quizRepository.CreateQuizAsync(quiz);
-            return MapQuizToDto(createdQuiz);
+                var lesson = await _lessonRepository.GetByIdAsync(createQuizDto.LessonId);
+                if (lesson == null)
+                    throw new ArgumentException($"Lesson with ID {createQuizDto.LessonId} not found.");
+
+                // Check if quiz already exists for this lesson
+                var existingQuiz = await _quizRepository.GetQuizByLessonIdAsync(createQuizDto.LessonId);
+                if (existingQuiz != null)
+                {
+                    throw new InvalidOperationException($"A quiz already exists for lesson {createQuizDto.LessonId}");
+                }
+
+                // Create or get quiz bank for this lesson
+                var quizBank = await _quizRepository.GetOrCreateQuizBankForLessonAsync(createQuizDto.LessonId);
+                _logger.LogInformation($"Using QuizBank ID: {quizBank.QuizBankId}");
+
+                var quiz = new Quiz
+                {
+                    QuizTitle = createQuizDto.QuizTitle,
+                    TimeLimitMinutes = createQuizDto.TimeLimitMinutes,
+                    QuizSize = createQuizDto.QuizSize,
+                    TotalMarks = createQuizDto.QuizSize, // Default: 1 mark per question
+                    LessonId = createQuizDto.LessonId,
+                    QuizBankId = quizBank.QuizBankId
+                };
+
+                var createdQuiz = await _quizRepository.CreateQuizAsync(quiz);
+                _logger.LogInformation($"Created quiz with ID: {createdQuiz.QuizId} linked to QuizBank ID: {createdQuiz.QuizBankId}");
+
+                return MapQuizToDto(createdQuiz);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error creating quiz for lesson {createQuizDto.LessonId}");
+                throw;
+            }
         }
 
         public async Task UpdateQuizAsync(int quizId, CreateQuizDto updateQuizDto)
@@ -144,27 +181,46 @@ namespace ExcellyGenLMS.Application.Services.Course // Correct namespace for App
 
         public async Task<QuizBankDto> CreateQuizBankAsync(int lessonId, CreateQuizBankDto createQuizBankDto)
         {
-            var lesson = await _lessonRepository.GetByIdAsync(lessonId);
-            if (lesson == null)
-                throw new ArgumentException($"Lesson with ID {lessonId} not found.");
-
-            var quizBank = new QuizBank
+            try
             {
-                QuizBankSize = createQuizBankDto.QuizBankSize
-            };
+                _logger.LogInformation($"Creating quiz bank for lesson {lessonId} with {createQuizBankDto.Questions?.Count ?? 0} questions");
 
-            var createdQuizBank = await _quizRepository.CreateQuizBankAsync(quizBank);
+                var lesson = await _lessonRepository.GetByIdAsync(lessonId);
+                if (lesson == null)
+                    throw new ArgumentException($"Lesson with ID {lessonId} not found.");
 
-            if (createQuizBankDto.Questions != null && createQuizBankDto.Questions.Any())
-            {
-                foreach (var questionDto in createQuizBankDto.Questions)
+                // Get or create quiz bank
+                var quizBank = await _quizRepository.GetOrCreateQuizBankForLessonAsync(lessonId);
+
+                // Update quiz bank size
+                quizBank.QuizBankSize = createQuizBankDto.QuizBankSize;
+                await _quizRepository.UpdateQuizBankAsync(quizBank);
+
+                _logger.LogInformation($"Using QuizBank ID: {quizBank.QuizBankId}, Size: {quizBank.QuizBankSize}");
+
+                if (createQuizBankDto.Questions != null && createQuizBankDto.Questions.Any())
                 {
-                    await AddQuestionToQuizBankAsync(createdQuizBank.QuizBankId, questionDto);
-                }
-            }
+                    _logger.LogInformation($"Adding {createQuizBankDto.Questions.Count} questions to quiz bank");
 
-            return await GetQuizBankByIdAsync(createdQuizBank.QuizBankId) ??
-                   throw new InvalidOperationException("Failed to retrieve created quiz bank.");
+                    foreach (var questionDto in createQuizBankDto.Questions)
+                    {
+                        var addedQuestion = await AddQuestionToQuizBankAsync(quizBank.QuizBankId, questionDto);
+                        _logger.LogInformation($"Added question {addedQuestion.QuizBankQuestionId}: '{addedQuestion.QuestionContent}'");
+                    }
+                }
+
+                var result = await GetQuizBankByIdAsync(quizBank.QuizBankId);
+                if (result == null)
+                    throw new InvalidOperationException("Failed to retrieve created quiz bank.");
+
+                _logger.LogInformation($"Successfully created quiz bank with {result.Questions.Count} questions");
+                return result;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error creating quiz bank for lesson {lessonId}");
+                throw;
+            }
         }
 
         // Question management
@@ -266,26 +322,73 @@ namespace ExcellyGenLMS.Application.Services.Course // Correct namespace for App
             await _quizRepository.DeleteQuizBankQuestionAsync(questionId);
         }
 
-        // Learner-facing quiz methods
+        // FIXED: Learner-facing quiz methods with better error handling and logging
         public async Task<IEnumerable<LearnerQuizQuestionDto>> GetQuestionsForLearnerQuizAsync(int quizId)
         {
-            var quiz = await _quizRepository.GetQuizByIdAsync(quizId);
-            if (quiz == null)
-                throw new ArgumentException($"Quiz with ID {quizId} not found.");
-
-            var questions = await _quizRepository.GetRandomQuestionsForQuizAsync(quizId, quiz.QuizSize);
-
-            return questions.Select(q => new LearnerQuizQuestionDto
+            try
             {
-                QuizBankQuestionId = q.QuizBankQuestionId,
-                QuestionContent = q.QuestionContent,
-                QuestionType = q.QuestionType,
-                Options = q.MCQQuestionOptions.Select(o => new LearnerMCQOptionDto
+                _logger.LogInformation($"🔍 Getting learner questions for quiz ID: {quizId}");
+
+                var quiz = await _quizRepository.GetQuizByIdAsync(quizId);
+                if (quiz == null)
                 {
-                    McqOptionId = o.McqOptionId,
-                    OptionText = o.OptionText
-                }).ToList()
-            });
+                    _logger.LogError($"❌ Quiz with ID {quizId} not found");
+                    throw new ArgumentException($"Quiz with ID {quizId} not found.");
+                }
+
+                _logger.LogInformation($"✅ Quiz found: {quiz.QuizTitle}, requesting {quiz.QuizSize} questions from quiz bank {quiz.QuizBankId}");
+
+                // First, let's check if the quiz bank has questions
+                var allQuestionsInBank = await _quizRepository.GetQuestionsForQuizBankAsync(quiz.QuizBankId);
+                var allQuestionsList = allQuestionsInBank.ToList();
+
+                _logger.LogInformation($"📊 Quiz bank {quiz.QuizBankId} contains {allQuestionsList.Count} total questions");
+
+                if (allQuestionsList.Count == 0)
+                {
+                    _logger.LogWarning($"⚠️ Quiz bank {quiz.QuizBankId} is empty - no questions available");
+                    return new List<LearnerQuizQuestionDto>();
+                }
+
+                // Get random questions for the quiz
+                var questions = await _quizRepository.GetRandomQuestionsForQuizAsync(quizId, quiz.QuizSize);
+                var questionsList = questions.ToList();
+
+                _logger.LogInformation($"🎲 Retrieved {questionsList.Count} random questions for quiz {quizId}");
+
+                if (!questionsList.Any())
+                {
+                    _logger.LogWarning($"⚠️ No questions returned by GetRandomQuestionsForQuizAsync for quiz {quizId}");
+                    return new List<LearnerQuizQuestionDto>();
+                }
+
+                var learnerQuestions = questionsList.Select(q => {
+                    var learnerQuestion = new LearnerQuizQuestionDto
+                    {
+                        QuizBankQuestionId = q.QuizBankQuestionId,
+                        QuestionContent = q.QuestionContent,
+                        QuestionType = q.QuestionType,
+                        Options = q.MCQQuestionOptions.Select(o => new LearnerMCQOptionDto
+                        {
+                            McqOptionId = o.McqOptionId,
+                            OptionText = o.OptionText
+                            // IsCorrect is deliberately omitted for learner view
+                        }).ToList()
+                    };
+
+                    _logger.LogInformation($"   📝 Question {q.QuizBankQuestionId}: '{q.QuestionContent}' with {learnerQuestion.Options.Count} options");
+
+                    return learnerQuestion;
+                }).ToList();
+
+                _logger.LogInformation($"✅ Successfully mapped {learnerQuestions.Count} learner questions for quiz {quizId}");
+                return learnerQuestions;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"💥 Error getting learner questions for quiz {quizId}");
+                throw;
+            }
         }
 
         // Helper methods

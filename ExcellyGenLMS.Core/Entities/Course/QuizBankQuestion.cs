@@ -1,8 +1,7 @@
-// QuizBankQuestion.cs
+// ExcellyGenLMS.Core/Entities/Course/QuizBankQuestion.cs
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using ExcellyGenLMS.Core.Entities.Course;
 
 namespace ExcellyGenLMS.Core.Entities.Course
 {
@@ -17,12 +16,13 @@ namespace ExcellyGenLMS.Core.Entities.Course
         [Required]
         [Column("quiz_bank_id")]
         public int QuizBankId { get; set; }
+
         [ForeignKey("QuizBankId")]
-        public QuizBank? QuizBank { get; set; } // Changed to nullable
+        public QuizBank? QuizBank { get; set; }
 
         [Required]
         [Column("question_content", TypeName = "TEXT")]
-        public required string QuestionContent { get; set; } // Keep this required
+        public required string QuestionContent { get; set; }
 
         [Column("question_type")]
         [MaxLength(50)]

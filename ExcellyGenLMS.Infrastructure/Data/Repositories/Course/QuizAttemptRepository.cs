@@ -3,7 +3,6 @@ using ExcellyGenLMS.Core.Entities.Course;
 using ExcellyGenLMS.Core.Interfaces.Repositories.Course;
 using ExcellyGenLMS.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -14,54 +13,59 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
     public class QuizAttemptRepository : IQuizAttemptRepository
     {
         private readonly ApplicationDbContext _context;
-        private readonly ILogger<QuizAttemptRepository> _logger;
 
-        public QuizAttemptRepository(ApplicationDbContext context, ILogger<QuizAttemptRepository> logger)
+        public QuizAttemptRepository(ApplicationDbContext context)
         {
-            _context = context ?? throw new ArgumentNullException(nameof(context));
-            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _context = context;
         }
 
         public async Task<QuizAttempt?> GetQuizAttemptByIdAsync(int attemptId)
         {
-            return await _context.Set<QuizAttempt>()
-                .Include(a => a.Quiz)
-                .Include(a => a.User)
-                .FirstOrDefaultAsync(a => a.QuizAttemptId == attemptId);
+            return await _context.QuizAttempts
+                                 .Include(qa => qa.Quiz)
+                                 .Include(qa => qa.User)
+                                 .Include(qa => qa.Answers)
+                                     .ThenInclude(a => a.Question)
+                                         .ThenInclude(q => q!.MCQQuestionOptions)
+                                 .Include(qa => qa.Answers)
+                                     .ThenInclude(a => a.SelectedOption)
+                                 .FirstOrDefaultAsync(qa => qa.QuizAttemptId == attemptId);
+        }
+
+        public async Task<QuizAttempt?> GetActiveAttemptByUserAndQuizAsync(string userId, int quizId)
+        {
+            return await _context.QuizAttempts
+                                 .Include(qa => qa.Quiz)
+                                 .Where(qa => qa.UserId == userId && qa.QuizId == quizId && !qa.IsCompleted)
+                                 .FirstOrDefaultAsync();
         }
 
         public async Task<IEnumerable<QuizAttempt>> GetAttemptsByUserIdAsync(string userId)
         {
-            return await _context.Set<QuizAttempt>()
-                .Where(a => a.UserId == userId)
-                .Include(a => a.Quiz)
-                .OrderByDescending(a => a.StartTime)
-                .ToListAsync();
+            return await _context.QuizAttempts
+                                 .Include(qa => qa.Quiz)
+                                 .Where(qa => qa.UserId == userId)
+                                 .OrderByDescending(qa => qa.StartTime)
+                                 .ToListAsync();
         }
 
         public async Task<IEnumerable<QuizAttempt>> GetAttemptsByQuizIdAsync(int quizId)
         {
-            return await _context.Set<QuizAttempt>()
-                .Where(a => a.QuizId == quizId)
-                .Include(a => a.User)
-                .OrderByDescending(a => a.StartTime)
-                .ToListAsync();
-        }
-
-        public async Task<IEnumerable<QuizAttempt>> GetAttemptsByUserAndQuizAsync(string userId, int quizId)
-        {
-            return await _context.Set<QuizAttempt>()
-                .Where(a => a.UserId == userId && a.QuizId == quizId)
-                .Include(a => a.Quiz)
-                .OrderByDescending(a => a.StartTime)
-                .ToListAsync();
+            return await _context.QuizAttempts
+                                 .Include(qa => qa.User)
+                                 .Include(qa => qa.Quiz)
+                                 .Where(qa => qa.QuizId == quizId)
+                                 .OrderByDescending(qa => qa.StartTime)
+                                 .ToListAsync();
         }
 
         public async Task<QuizAttempt> CreateQuizAttemptAsync(QuizAttempt attempt)
         {
-            _context.Set<QuizAttempt>().Add(attempt);
+            _context.QuizAttempts.Add(attempt);
             await _context.SaveChangesAsync();
-            return attempt;
+
+            // Return the attempt with loaded navigation properties
+            return await GetQuizAttemptByIdAsync(attempt.QuizAttemptId) ?? attempt;
         }
 
         public async Task UpdateQuizAttemptAsync(QuizAttempt attempt)
@@ -70,26 +74,40 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
             await _context.SaveChangesAsync();
         }
 
-        public async Task<QuizAttemptAnswer?> GetQuizAttemptAnswerByIdAsync(int answerId)
+        public async Task DeleteQuizAttemptAsync(int attemptId)
         {
-            return await _context.Set<QuizAttemptAnswer>()
-                .Include(a => a.Question)
-                .Include(a => a.SelectedOption)
-                .FirstOrDefaultAsync(a => a.QuizAttemptAnswerId == answerId);
+            var attempt = await _context.QuizAttempts.FindAsync(attemptId);
+            if (attempt != null)
+            {
+                _context.QuizAttempts.Remove(attempt);
+                await _context.SaveChangesAsync();
+            }
+        }
+
+        // Answer operations
+        public async Task<QuizAttemptAnswer?> GetAnswerByAttemptAndQuestionAsync(int attemptId, int questionId)
+        {
+            return await _context.QuizAttemptAnswers
+                                 .Include(qaa => qaa.SelectedOption)
+                                 .Include(qaa => qaa.Question)
+                                     .ThenInclude(q => q!.MCQQuestionOptions)
+                                 .FirstOrDefaultAsync(qaa => qaa.QuizAttemptId == attemptId && qaa.QuizBankQuestionId == questionId);
         }
 
         public async Task<IEnumerable<QuizAttemptAnswer>> GetAnswersByAttemptIdAsync(int attemptId)
         {
-            return await _context.Set<QuizAttemptAnswer>()
-                .Where(a => a.QuizAttemptId == attemptId)
-                .Include(a => a.Question)
-                .Include(a => a.SelectedOption)
-                .ToListAsync();
+            return await _context.QuizAttemptAnswers
+                                 .Include(qaa => qaa.Question)
+                                     .ThenInclude(q => q!.MCQQuestionOptions)
+                                 .Include(qaa => qaa.SelectedOption)
+                                 .Where(qaa => qaa.QuizAttemptId == attemptId)
+                                 .OrderBy(qaa => qaa.Question!.QuestionBankOrder)
+                                 .ToListAsync();
         }
 
-        public async Task<QuizAttemptAnswer> AddAnswerToAttemptAsync(QuizAttemptAnswer answer)
+        public async Task<QuizAttemptAnswer> CreateQuizAttemptAnswerAsync(QuizAttemptAnswer answer)
         {
-            _context.Set<QuizAttemptAnswer>().Add(answer);
+            _context.QuizAttemptAnswers.Add(answer);
             await _context.SaveChangesAsync();
             return answer;
         }
@@ -98,6 +116,25 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
         {
             _context.Entry(answer).State = EntityState.Modified;
             await _context.SaveChangesAsync();
+        }
+
+        public async Task<IEnumerable<QuizAttempt>> GetCompletedAttemptsByUserAndQuizAsync(string userId, int quizId)
+        {
+            return await _context.QuizAttempts
+                .Where(qa => qa.UserId == userId &&
+                             qa.QuizId == quizId &&
+                             qa.IsCompleted == true)
+                .ToListAsync();
+        }
+
+        public async Task DeleteQuizAttemptAnswerAsync(int answerId)
+        {
+            var answer = await _context.QuizAttemptAnswers.FindAsync(answerId);
+            if (answer != null)
+            {
+                _context.QuizAttemptAnswers.Remove(answer);
+                await _context.SaveChangesAsync();
+            }
         }
     }
 }

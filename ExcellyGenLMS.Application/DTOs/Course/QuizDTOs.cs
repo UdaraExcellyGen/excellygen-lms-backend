@@ -83,7 +83,7 @@ namespace ExcellyGenLMS.Application.DTOs.Course
     public class CreateQuizBankDto
     {
         [Required]
-        [Range(5, 1000)]
+        [Range(2, 1000)]
         public int QuizBankSize { get; set; }
 
         public List<CreateQuizBankQuestionDto>? Questions { get; set; }
@@ -138,6 +138,7 @@ namespace ExcellyGenLMS.Application.DTOs.Course
     public class QuizAttemptAnswerDto
     {
         public int QuizAttemptAnswerId { get; set; }
+        public int QuizAttemptId { get; set; }
         public int QuizBankQuestionId { get; set; }
         public string QuestionContent { get; set; } = string.Empty;
         public int? SelectedOptionId { get; set; }
