@@ -177,6 +177,40 @@ namespace ExcellyGenLMS.API.Controllers.ProjectManager
             }
         }
 
+        [HttpPut("employee-assignments/{id}")]
+        public async Task<ActionResult<EmployeeAssignmentDto>> UpdateEmployeeAssignment(int id, [FromBody] UpdateEmployeeAssignmentDto request)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(request.Role))
+                {
+                    return BadRequest(new { message = "Role is required" });
+                }
+
+                if (request.WorkloadPercentage <= 0 || request.WorkloadPercentage > 100)
+                {
+                    return BadRequest(new { message = "WorkloadPercentage must be between 1 and 100" });
+                }
+
+                var assignment = await _employeeAssignmentService.UpdateEmployeeAssignmentAsync(id, request);
+                if (assignment == null)
+                {
+                    return NotFound(new { message = $"Assignment with ID {id} not found" });
+                }
+
+                return Ok(assignment);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error updating assignment {id}");
+                return StatusCode(500, new { message = "An error occurred while updating assignment", error = ex.Message });
+            }
+        }
+
         [HttpDelete("employee-assignments/{id}")]
         public async Task<ActionResult> RemoveEmployeeAssignment(int id)
         {
