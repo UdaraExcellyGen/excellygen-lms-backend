@@ -264,6 +264,35 @@ namespace ExcellyGenLMS.Application.Services.ProjectManager
             return createdAssignments.Select(MapToAssignmentDto);
         }
 
+        public async Task<EmployeeAssignmentDto?> UpdateEmployeeAssignmentAsync(int assignmentId, UpdateEmployeeAssignmentDto request)
+        {
+            _logger.LogInformation($"Updating assignment {assignmentId}");
+
+            var existingAssignment = await _assignmentRepository.GetByIdAsync(assignmentId);
+            if (existingAssignment == null)
+            {
+                return null;
+            }
+
+            // Calculate the workload change
+            var currentWorkload = await _assignmentRepository.GetEmployeeCurrentWorkloadAsync(existingAssignment.EmployeeId);
+            var workloadWithoutThisAssignment = currentWorkload - existingAssignment.WorkloadPercentage;
+            var newTotalWorkload = workloadWithoutThisAssignment + request.WorkloadPercentage;
+
+            // Validate that the new workload doesn't exceed 100%
+            if (newTotalWorkload > 100)
+            {
+                throw new InvalidOperationException($"Updated workload would exceed 100%. Current: {workloadWithoutThisAssignment}%, Requested: {request.WorkloadPercentage}%, Total: {newTotalWorkload}%");
+            }
+
+            // Update the assignment
+            existingAssignment.Role = request.Role;
+            existingAssignment.WorkloadPercentage = request.WorkloadPercentage;
+
+            var updatedAssignment = await _assignmentRepository.UpdateAsync(existingAssignment);
+            return MapToAssignmentDto(updatedAssignment);
+        }
+
         public async Task<bool> RemoveEmployeeFromProjectAsync(int assignmentId)
         {
             _logger.LogInformation($"Removing assignment {assignmentId}");
