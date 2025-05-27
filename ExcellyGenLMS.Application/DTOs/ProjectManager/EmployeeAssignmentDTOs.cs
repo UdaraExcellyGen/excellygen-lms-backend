@@ -41,6 +41,12 @@ namespace ExcellyGenLMS.Application.DTOs.ProjectManager
         public int WorkloadPercentage { get; set; } = 100;
     }
 
+    public class UpdateEmployeeAssignmentDto
+    {
+        public string Role { get; set; } = string.Empty;
+        public int WorkloadPercentage { get; set; } = 100;
+    }
+
     public class BulkAssignEmployeesDto
     {
         public string ProjectId { get; set; } = string.Empty;

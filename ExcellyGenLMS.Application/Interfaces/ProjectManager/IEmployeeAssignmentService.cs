@@ -15,6 +15,7 @@ namespace ExcellyGenLMS.Application.Interfaces.ProjectManager
         
         Task<EmployeeAssignmentDto> AssignEmployeeToProjectAsync(CreateEmployeeAssignmentDto request);
         Task<IEnumerable<EmployeeAssignmentDto>> AssignMultipleEmployeesToProjectAsync(BulkAssignEmployeesDto request);
+        Task<EmployeeAssignmentDto?> UpdateEmployeeAssignmentAsync(int assignmentId, UpdateEmployeeAssignmentDto request);
         Task<bool> RemoveEmployeeFromProjectAsync(int assignmentId);
         Task<bool> RemoveEmployeeFromProjectByIdsAsync(string projectId, string employeeId);
         

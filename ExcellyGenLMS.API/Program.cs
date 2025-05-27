@@ -343,6 +343,9 @@ static void RegisterRepositories(IServiceCollection services)
     // Project Management Repositories
     services.AddScoped<IProjectRepository, ProjectRepository>();
     services.AddScoped<IRoleRepository, RoleRepository>();
+    
+    // *** FIXED: Added missing PMEmployeeAssignmentRepository registration ***
+    services.AddScoped<IPMEmployeeAssignmentRepository, PMEmployeeAssignmentRepository>();
 
     Console.WriteLine("Repository registrations completed");
 }
@@ -395,6 +398,9 @@ static void RegisterApplicationServices(IServiceCollection services)
         ExcellyGenLMS.Application.Services.ProjectManager.RoleService>();
     services.AddScoped<ExcellyGenLMS.Application.Interfaces.ProjectManager.IPMTechnologyService,
         ExcellyGenLMS.Application.Services.ProjectManager.PMTechnologyService>();
+    
+    // *** FIXED: Added missing EmployeeAssignmentService registration ***
+    services.AddScoped<IEmployeeAssignmentService, EmployeeAssignmentService>();
 
     Console.WriteLine("Application services registration completed");
 }
