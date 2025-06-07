@@ -9,7 +9,8 @@ using System.Collections.Generic;
 using System.Security.Authentication;
 using System.Threading.Tasks;
 using Microsoft.IdentityModel.Tokens;
-using ExcellyGenLMS.Application.Interfaces.Common; 
+using ExcellyGenLMS.Application.Interfaces.Common;
+using System.IdentityModel.Tokens.Jwt;
 
 namespace ExcellyGenLMS.API.Controllers.Auth
 {
@@ -22,7 +23,8 @@ namespace ExcellyGenLMS.API.Controllers.Auth
         private readonly IUserRepository _userRepository;
         private readonly ILogger<AuthController> _logger;
         private readonly IFirebaseAuthService _firebaseAuthService;
-        private readonly IEmailService _emailService; // Add this field
+        private readonly IEmailService _emailService;
+        private readonly ITokenService _tokenService;
 
         public AuthController(
             IAuthService authService,
@@ -30,14 +32,16 @@ namespace ExcellyGenLMS.API.Controllers.Auth
             IUserRepository userRepository,
             ILogger<AuthController> logger,
             IFirebaseAuthService firebaseAuthService,
-            IEmailService emailService) // Add parameter to constructor
+            IEmailService emailService,
+            ITokenService tokenService)
         {
             _authService = authService;
             _userService = userService;
             _userRepository = userRepository;
             _logger = logger;
             _firebaseAuthService = firebaseAuthService;
-            _emailService = emailService; // Store email service
+            _emailService = emailService;
+            _tokenService = tokenService;
         }
 
         [HttpPost("login")]
@@ -248,6 +252,60 @@ namespace ExcellyGenLMS.API.Controllers.Auth
             catch (Exception ex)
             {
                 _logger.LogError($"Token validation error: {ex.Message}");
+                return StatusCode(500, new { message = "An error occurred", details = ex.Message });
+            }
+        }
+
+        [HttpPost("heartbeat")]
+        public async Task<ActionResult> Heartbeat([FromBody] HeartbeatDto heartbeatDto)
+        {
+            try
+            {
+                _logger.LogInformation("Processing session heartbeat");
+
+                if (string.IsNullOrEmpty(heartbeatDto.AccessToken))
+                {
+                    return BadRequest(new { message = "Access token is required" });
+                }
+
+                // Validate the token but also extend its lifetime
+                var principal = _tokenService.GetPrincipalFromExpiredToken(heartbeatDto.AccessToken);
+                var userId = principal.Claims.FirstOrDefault(c => c.Type == JwtRegisteredClaimNames.Sub)?.Value;
+                var currentRole = principal.Claims.FirstOrDefault(c => c.Type == "CurrentRole")?.Value;
+
+                if (string.IsNullOrEmpty(userId) || string.IsNullOrEmpty(currentRole))
+                {
+                    _logger.LogWarning("Invalid access token in heartbeat: missing claims");
+                    return BadRequest(new { message = "Invalid access token" });
+                }
+
+                // Check if user exists and is active
+                var user = await _userRepository.GetUserByIdAsync(userId);
+                if (user == null)
+                {
+                    _logger.LogWarning("User not found in heartbeat");
+                    return Unauthorized(new { message = "User not found" });
+                }
+
+                if (user.Status != "active")
+                {
+                    _logger.LogWarning("User is inactive in heartbeat");
+                    return Unauthorized(new { message = "User is inactive" });
+                }
+
+                // Generate a new token with extended expiration
+                var tokenDto = _tokenService.GenerateTokens(user, currentRole);
+
+                // Update the expiry time on the client side
+                return Ok(new
+                {
+                    accessToken = tokenDto.AccessToken,
+                    expiresAt = tokenDto.ExpiresAt
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Heartbeat error: {ex.Message}");
                 return StatusCode(500, new { message = "An error occurred", details = ex.Message });
             }
         }
