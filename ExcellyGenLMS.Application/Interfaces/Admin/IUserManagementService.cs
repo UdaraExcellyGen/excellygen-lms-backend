@@ -13,5 +13,14 @@ namespace ExcellyGenLMS.Application.Interfaces.Admin
         Task<bool> DeleteUserAsync(string id);
         Task<AdminUserDto?> ToggleUserStatusAsync(string id);
         Task<List<AdminUserDto>> SearchUsersAsync(AdminUserSearchParams searchParams);
+
+        // Add these new permission-based methods
+        Task<AdminUserDto> CreateUserAsync(string currentUserId, AdminCreateUserDto createUserDto);
+        Task<AdminUserDto?> UpdateUserAsync(string currentUserId, string id, AdminUpdateUserDto updateUserDto);
+        Task<bool> DeleteUserAsync(string currentUserId, string id);
+        Task<AdminUserDto?> ToggleUserStatusAsync(string currentUserId, string id);
+
+        // Add SuperAdmin promotion method
+        Task<AdminUserDto?> PromoteToSuperAdminAsync(string currentUserId, string targetUserId);
     }
 }
