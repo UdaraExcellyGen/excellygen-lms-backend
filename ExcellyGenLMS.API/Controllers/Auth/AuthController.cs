@@ -11,6 +11,9 @@ using System.Threading.Tasks;
 using Microsoft.IdentityModel.Tokens;
 using ExcellyGenLMS.Application.Interfaces.Common;
 using System.IdentityModel.Tokens.Jwt;
+using ExcellyGenLMS.Application.Interfaces.Admin;
+using System.Security;
+using System.Linq;
 
 namespace ExcellyGenLMS.API.Controllers.Auth
 {
@@ -25,6 +28,7 @@ namespace ExcellyGenLMS.API.Controllers.Auth
         private readonly IFirebaseAuthService _firebaseAuthService;
         private readonly IEmailService _emailService;
         private readonly ITokenService _tokenService;
+        private readonly IUserManagementService? _userManagementService; // Made nullable
 
         public AuthController(
             IAuthService authService,
@@ -33,7 +37,8 @@ namespace ExcellyGenLMS.API.Controllers.Auth
             ILogger<AuthController> logger,
             IFirebaseAuthService firebaseAuthService,
             IEmailService emailService,
-            ITokenService tokenService)
+            ITokenService tokenService,
+            IUserManagementService? userManagementService = null) // Optional dependency to support existing code
         {
             _authService = authService;
             _userService = userService;
@@ -42,6 +47,7 @@ namespace ExcellyGenLMS.API.Controllers.Auth
             _firebaseAuthService = firebaseAuthService;
             _emailService = emailService;
             _tokenService = tokenService;
+            _userManagementService = userManagementService;
         }
 
         [HttpPost("login")]
@@ -116,7 +122,8 @@ namespace ExcellyGenLMS.API.Controllers.Auth
                         Email = user.Email,
                         Roles = user.Roles ?? new List<string>(),
                         Token = tokenDto,
-                        RequirePasswordChange = user.RequirePasswordChange
+                        RequirePasswordChange = user.RequirePasswordChange,
+                        Avatar = user.Avatar
                     };
 
                     _logger.LogInformation($"Login successful for user: {user.Id} (fallback method)");
@@ -311,7 +318,7 @@ namespace ExcellyGenLMS.API.Controllers.Auth
         }
 
         [HttpPost("sync-firebase-users")]
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Admin,SuperAdmin")]  // Updated to include SuperAdmin
         public async Task<ActionResult> SyncFirebaseUsers()
         {
             try
@@ -415,7 +422,7 @@ namespace ExcellyGenLMS.API.Controllers.Auth
         }
 
         [HttpPost("fix-role-capitalization")]
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Admin,SuperAdmin")]  // Updated to include SuperAdmin
         public async Task<ActionResult> FixRoleCapitalization()
         {
             try
@@ -461,6 +468,11 @@ namespace ExcellyGenLMS.API.Controllers.Auth
                                 formattedRole = "ProjectManager";
                                 needsUpdate = true;
                             }
+                            else if (role.Equals("superadmin", StringComparison.OrdinalIgnoreCase) && role != "SuperAdmin")
+                            {
+                                formattedRole = "SuperAdmin";
+                                needsUpdate = true;
+                            }
 
                             updatedRoles.Add(formattedRole);
                         }
@@ -488,5 +500,58 @@ namespace ExcellyGenLMS.API.Controllers.Auth
                 return StatusCode(500, new { message = "An error occurred while fixing role capitalization", details = ex.Message });
             }
         }
+
+        // New endpoint for SuperAdmin promotion
+        [HttpPost("promote-to-superadmin")]
+        [Authorize(Roles = "SuperAdmin")]
+        public async Task<IActionResult> PromoteToSuperAdmin([FromBody] PromoteToSuperAdminDto request)
+        {
+            try
+            {
+                _logger.LogInformation($"SuperAdmin promotion request for user: {request.UserId}");
+
+                // Get the current user ID from the token
+                var userId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+                if (string.IsNullOrEmpty(userId))
+                {
+                    return Unauthorized(new { message = "Invalid token" });
+                }
+
+                // Check if the UserManagementService is available
+                if (_userManagementService == null)
+                {
+                    _logger.LogWarning("UserManagementService is not available");
+                    return StatusCode(500, new { message = "SuperAdmin promotion service is not available" });
+                }
+
+                // Call the service method to promote the user
+                try
+                {
+                    var result = await _userManagementService.PromoteToSuperAdminAsync(userId, request.UserId);
+                    if (result == null)
+                    {
+                        return NotFound(new { message = "User not found" });
+                    }
+
+                    return Ok(result);
+                }
+                catch (SecurityException ex)
+                {
+                    _logger.LogWarning($"Permission denied: {ex.Message}");
+                    return Forbid();
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Error promoting to SuperAdmin: {ex.Message}");
+                return StatusCode(500, new { message = "An error occurred", details = ex.Message });
+            }
+        }
+    }
+
+    // DTO for promoting a user to SuperAdmin
+    public class PromoteToSuperAdminDto
+    {
+        public required string UserId { get; set; } // Added 'required' keyword to fix warning
     }
 }
