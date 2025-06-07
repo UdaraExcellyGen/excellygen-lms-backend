@@ -9,7 +9,7 @@ using System.Collections.Generic;
 using System.Security.Authentication;
 using System.Threading.Tasks;
 using Microsoft.IdentityModel.Tokens;
-using ExcellyGenLMS.Application.Interfaces.Common; // Add this for IEmailService
+using ExcellyGenLMS.Application.Interfaces.Common; 
 
 namespace ExcellyGenLMS.API.Controllers.Auth
 {

@@ -24,7 +24,7 @@ namespace ExcellyGenLMS.Application.Services.Admin
         private static readonly object _lockObject = new object();
         private static long _lastTimestamp = -1L;
         private static int _sequence = 0;
-        private const long EPOCH = 1609459200000L; // January 1, 2021 as epoch
+        private const long EPOCH = 1609459200000L; 
 
         public UserManagementService(
             IUserRepository userRepository,
