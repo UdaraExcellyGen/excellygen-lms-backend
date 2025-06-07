@@ -35,21 +35,24 @@ using ExcellyGenLMS.Application.Interfaces.Auth;
 using ExcellyGenLMS.Application.Interfaces.Admin;
 using ExcellyGenLMS.Application.Interfaces.Common;
 using ExcellyGenLMS.Application.Interfaces.Course;
-using ExcellyGenLMS.Application.Interfaces.Learner;
+using ExcellyGenLMS.Application.Interfaces.Learner; // ICvService is in this namespace
 using ExcellyGenLMS.Application.Interfaces.ProjectManager;
 using ExcellyGenLMS.Application.Services.Auth;
 using ExcellyGenLMS.Application.Services.Admin;
 using ExcellyGenLMS.Application.Services.Course;
-using ExcellyGenLMS.Application.Services.Learner;
+using ExcellyGenLMS.Application.Services.Learner;   // CvService is in this namespace
 using ExcellyGenLMS.Application.Services.ProjectManager;
+
 
 // API Layer
 using ExcellyGenLMS.API.Middleware;
+// Explicitly list controller namespaces if they are distinct
 using ExcellyGenLMS.API.Controllers.Admin;
 using ExcellyGenLMS.API.Controllers.Course;
-using ExcellyGenLMS.API.Controllers.Learner;
+using ExcellyGenLMS.API.Controllers.Learner; // CvController is in this namespace
 using ExcellyGenLMS.API.Controllers.Auth;
 using ExcellyGenLMS.API.Controllers.ProjectManager;
+
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -247,10 +250,12 @@ static void ConfigureControllers(WebApplicationBuilder builder)
 {
     builder.Services.AddHttpContextAccessor();
     builder.Services.AddControllers()
-        .AddApplicationPart(typeof(CourseCategoriesController).Assembly)
-        .AddApplicationPart(typeof(DashboardController).Assembly)
-        .AddApplicationPart(typeof(CoursesController).Assembly)
-        .AddApplicationPart(typeof(LearnerStatsController).Assembly)
+        // Explicitly adding application parts for controllers ensures discovery,
+        // especially if controllers are spread across different namespaces within the API project.
+        .AddApplicationPart(typeof(ExcellyGenLMS.API.Controllers.Admin.CourseCategoriesController).Assembly)
+        .AddApplicationPart(typeof(ExcellyGenLMS.API.Controllers.Course.CoursesController).Assembly)
+        .AddApplicationPart(typeof(ExcellyGenLMS.API.Controllers.Learner.CvController).Assembly) // Ensures CvController is found
+        .AddApplicationPart(typeof(ExcellyGenLMS.API.Controllers.Auth.AuthController).Assembly)
         .AddJsonOptions(options =>
         {
             options.JsonSerializerOptions.Converters.Add(
@@ -343,8 +348,6 @@ static void RegisterRepositories(IServiceCollection services)
     // Project Management Repositories
     services.AddScoped<IProjectRepository, ProjectRepository>();
     services.AddScoped<IRoleRepository, RoleRepository>();
-    
-    // *** FIXED: Added missing PMEmployeeAssignmentRepository registration ***
     services.AddScoped<IPMEmployeeAssignmentRepository, PMEmployeeAssignmentRepository>();
 
     Console.WriteLine("Repository registrations completed");
@@ -368,7 +371,7 @@ static void RegisterApplicationServices(IServiceCollection services)
     services.AddScoped<IAnalyticsService, AnalyticsService>();
 
     // File Management Services
-    services.AddScoped<IFileStorageService, LocalFileStorageService>();
+    services.AddScoped<IFileStorageService, LocalFileStorageService>(); // Or FirebaseFileStorageService
     services.AddScoped<IFileService, FileService>();
 
     // Course Services
@@ -391,6 +394,10 @@ static void RegisterApplicationServices(IServiceCollection services)
     services.AddScoped<ExcellyGenLMS.Application.Interfaces.Learner.ILearnerStatsService,
         ExcellyGenLMS.Application.Services.Learner.LearnerStatsService>();
 
+    // CV Service Registration (ICvService and CvService are in *.Learner namespaces)
+    services.AddScoped<ICvService, CvService>();
+
+
     // Project Management Services
     services.AddScoped<ExcellyGenLMS.Application.Interfaces.ProjectManager.IProjectService,
         ExcellyGenLMS.Application.Services.ProjectManager.ProjectService>();
@@ -398,8 +405,6 @@ static void RegisterApplicationServices(IServiceCollection services)
         ExcellyGenLMS.Application.Services.ProjectManager.RoleService>();
     services.AddScoped<ExcellyGenLMS.Application.Interfaces.ProjectManager.IPMTechnologyService,
         ExcellyGenLMS.Application.Services.ProjectManager.PMTechnologyService>();
-    
-    // *** FIXED: Added missing EmployeeAssignmentService registration ***
     services.AddScoped<IEmployeeAssignmentService, EmployeeAssignmentService>();
 
     Console.WriteLine("Application services registration completed");
