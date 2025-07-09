@@ -8,7 +8,6 @@ using Microsoft.OpenApi.Models;
 using Microsoft.AspNetCore.Identity;
 using System.Data;
 using Microsoft.Data.SqlClient;
-using Microsoft.Extensions.FileProviders;
 
 // Infrastructure Layer
 using ExcellyGenLMS.Infrastructure.Data;
@@ -343,8 +342,6 @@ static void RegisterRepositories(IServiceCollection services)
     // Project Management Repositories
     services.AddScoped<IProjectRepository, ProjectRepository>();
     services.AddScoped<IRoleRepository, RoleRepository>();
-    
-    // *** FIXED: Added missing PMEmployeeAssignmentRepository registration ***
     services.AddScoped<IPMEmployeeAssignmentRepository, PMEmployeeAssignmentRepository>();
 
     Console.WriteLine("Repository registrations completed");
@@ -367,8 +364,8 @@ static void RegisterApplicationServices(IServiceCollection services)
     services.AddScoped<IDashboardService, DashboardService>();
     services.AddScoped<IAnalyticsService, AnalyticsService>();
 
-    // File Management Services
-    services.AddScoped<IFileStorageService, LocalFileStorageService>();
+    // File Storage Services - FIREBASE STORAGE
+    services.AddScoped<IFileStorageService, FirebaseStorageService>();
     services.AddScoped<IFileService, FileService>();
 
     // Course Services
@@ -398,8 +395,6 @@ static void RegisterApplicationServices(IServiceCollection services)
         ExcellyGenLMS.Application.Services.ProjectManager.RoleService>();
     services.AddScoped<ExcellyGenLMS.Application.Interfaces.ProjectManager.IPMTechnologyService,
         ExcellyGenLMS.Application.Services.ProjectManager.PMTechnologyService>();
-    
-    // *** FIXED: Added missing EmployeeAssignmentService registration ***
     services.AddScoped<IEmployeeAssignmentService, EmployeeAssignmentService>();
 
     Console.WriteLine("Application services registration completed");
@@ -427,87 +422,13 @@ static void ConfigureMiddlewarePipeline(WebApplication app)
         Console.WriteLine("Production middleware configured");
     }
 
-    // Core Middleware Pipeline
+    // Core Middleware Pipeline - NO STATIC FILES
     app.UseHttpsRedirection();
-    ConfigureStaticFiles(app);
     app.UseCors("AllowReactApp");
     app.UseAuthentication();
     app.UseAuthorization();
     app.UseRoleAuthorization(); // Custom middleware
     app.MapControllers();
 
-    Console.WriteLine("Middleware pipeline configured");
-}
-
-static void ConfigureStaticFiles(WebApplication app)
-{
-    var contentRoot = app.Environment.ContentRootPath;
-    var webRootPath = Path.Combine(contentRoot, "wwwroot");
-
-    // Ensure directories exist
-    EnsureDirectoryExists(webRootPath);
-    EnsureUploadDirectories(webRootPath);
-
-    // Configure static files
-    app.UseStaticFiles(new StaticFileOptions
-    {
-        FileProvider = new PhysicalFileProvider(webRootPath),
-        RequestPath = ""
-    });
-
-    // Configure custom file storage
-    var fileStoragePath = app.Configuration.GetValue<string>("FileStorage:LocalPath") ??
-        Path.Combine(contentRoot, "uploads");
-
-    EnsureDirectoryExists(fileStoragePath);
-
-    var fullFileStoragePath = Path.GetFullPath(fileStoragePath);
-    var fullWwwRootPath = Path.GetFullPath(webRootPath);
-
-    if (!fullFileStoragePath.StartsWith(fullWwwRootPath, StringComparison.OrdinalIgnoreCase))
-    {
-        app.UseStaticFiles(new StaticFileOptions
-        {
-            FileProvider = new PhysicalFileProvider(fileStoragePath),
-            RequestPath = "/uploads"
-        });
-        Console.WriteLine($"Custom file storage configured: {fileStoragePath}");
-    }
-
-    Console.WriteLine("Static files configuration completed");
-}
-
-static void EnsureDirectoryExists(string path)
-{
-    if (!Directory.Exists(path))
-    {
-        try
-        {
-            Directory.CreateDirectory(path);
-            Console.WriteLine($"Created directory: {path}");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Failed to create directory {path}: {ex.Message}");
-        }
-    }
-}
-
-static void EnsureUploadDirectories(string webRootPath)
-{
-    var uploadPaths = new[]
-    {
-        "uploads",
-        "uploads/avatars",
-        "uploads/badges",
-        "uploads/certifications",
-        "uploads/forum",
-        "uploads/courses",
-        "uploads/documents"
-    };
-
-    foreach (var uploadPath in uploadPaths)
-    {
-        EnsureDirectoryExists(Path.Combine(webRootPath, uploadPath));
-    }
+    Console.WriteLine("Middleware pipeline configured successfully");
 }
