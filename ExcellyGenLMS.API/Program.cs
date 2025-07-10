@@ -339,6 +339,9 @@ static void RegisterRepositories(IServiceCollection services)
     services.AddScoped<IThreadCommentRepository, ThreadCommentRepository>();
     services.AddScoped<IThreadComReplyRepository, ThreadComReplyRepository>();
 
+    // Learner Notification Repository - ADDED FOR NOTIFICATION SYSTEM
+    services.AddScoped<ILearnerNotificationRepository, LearnerNotificationRepository>();
+
     // Project Management Repositories
     services.AddScoped<IProjectRepository, ProjectRepository>();
     services.AddScoped<IRoleRepository, RoleRepository>();
@@ -387,6 +390,9 @@ static void RegisterApplicationServices(IServiceCollection services)
     services.AddScoped<IForumService, ForumService>();
     services.AddScoped<ExcellyGenLMS.Application.Interfaces.Learner.ILearnerStatsService,
         ExcellyGenLMS.Application.Services.Learner.LearnerStatsService>();
+
+    // Learner Notification Service - ADDED FOR NOTIFICATION SYSTEM
+    services.AddScoped<ILearnerNotificationService, LearnerNotificationService>();
 
     // Project Management Services
     services.AddScoped<ExcellyGenLMS.Application.Interfaces.ProjectManager.IProjectService,
