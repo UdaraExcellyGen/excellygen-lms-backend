@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Security.Cryptography;
+using System.Security;
 using ExcellyGenLMS.Application.DTOs.Admin;
 using ExcellyGenLMS.Application.DTOs.Auth;
 using ExcellyGenLMS.Application.Interfaces.Admin;
@@ -20,11 +21,15 @@ namespace ExcellyGenLMS.Application.Services.Admin
         private readonly IFirebaseAuthService _firebaseAuthService;
         private readonly ILogger<UserManagementService> _logger;
 
+        // Constants
+        private const string SUPER_ADMIN_ROLE = "SuperAdmin";
+        private const string ADMIN_ROLE = "Admin";
+
         // Snowflake ID variables
         private static readonly object _lockObject = new object();
         private static long _lastTimestamp = -1L;
         private static int _sequence = 0;
-        private const long EPOCH = 1609459200000L; 
+        private const long EPOCH = 1609459200000L;
 
         public UserManagementService(
             IUserRepository userRepository,
@@ -35,6 +40,96 @@ namespace ExcellyGenLMS.Application.Services.Admin
             _firebaseAuthService = firebaseAuthService ?? throw new ArgumentNullException(nameof(firebaseAuthService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
+
+        #region SuperAdmin Permission Methods
+
+        // Check if a user is a SuperAdmin
+        private bool IsSuperAdmin(User user)
+        {
+            return user.Roles != null && user.Roles.Any(r => r == SUPER_ADMIN_ROLE);
+        }
+
+        // Check if a user is a regular Admin (but not SuperAdmin)
+        private bool IsRegularAdmin(User user)
+        {
+            return user.Roles != null &&
+                   user.Roles.Any(r => r == ADMIN_ROLE) &&
+                   !user.Roles.Any(r => r == SUPER_ADMIN_ROLE);
+        }
+
+        // Check if a user has any admin privileges (either Admin or SuperAdmin)
+        private bool HasAdminPrivileges(User user)
+        {
+            return user.Roles != null &&
+                   (user.Roles.Any(r => r == ADMIN_ROLE) ||
+                    user.Roles.Any(r => r == SUPER_ADMIN_ROLE));
+        }
+
+        // Check if current user can delete target user
+        private bool CanDeleteUser(User currentUser, User targetUser)
+        {
+            // SuperAdmin can delete anyone except themselves
+            if (IsSuperAdmin(currentUser))
+            {
+                return currentUser.Id != targetUser.Id;
+            }
+
+            // Regular Admin can only delete non-admin users
+            if (IsRegularAdmin(currentUser))
+            {
+                return !HasAdminPrivileges(targetUser);
+            }
+
+            // Non-admin users cannot delete anyone
+            return false;
+        }
+
+        // Check if current user can edit target user
+        private bool CanEditUser(User currentUser, User targetUser)
+        {
+            // SuperAdmin can edit anyone (including themselves)
+            if (IsSuperAdmin(currentUser))
+            {
+                return true;
+            }
+
+            // Regular Admin can only edit non-admin users
+            if (IsRegularAdmin(currentUser))
+            {
+                return !HasAdminPrivileges(targetUser);
+            }
+
+            // Non-admin users cannot edit anyone
+            return false;
+        }
+
+        // Check if user can create users with specific role
+        private bool CanCreateUserWithRole(User currentUser, string role)
+        {
+            // Only SuperAdmin can create another SuperAdmin
+            if (role == SUPER_ADMIN_ROLE)
+            {
+                return IsSuperAdmin(currentUser);
+            }
+
+            // Both Admin and SuperAdmin can create users with other roles
+            return HasAdminPrivileges(currentUser);
+        }
+
+        // Get the current user from ID
+        private async Task<User> GetCurrentUserAsync(string currentUserId)
+        {
+            var currentUser = await _userRepository.GetUserByIdAsync(currentUserId);
+            if (currentUser == null)
+            {
+                throw new UnauthorizedAccessException("Current user not found");
+            }
+            return currentUser;
+        }
+
+        #endregion
+
+        #region Standard User Management Methods
 
         public async Task<List<AdminUserDto>> GetAllUsersAsync()
         {
@@ -360,6 +455,172 @@ namespace ExcellyGenLMS.Application.Services.Admin
             }
         }
 
+        #endregion
+
+        #region SuperAdmin Permission-Based Methods
+
+        // Create user with permission check
+        public async Task<AdminUserDto> CreateUserAsync(string currentUserId, AdminCreateUserDto createUserDto)
+        {
+            try
+            {
+                var currentUser = await GetCurrentUserAsync(currentUserId);
+
+                // Check if the current user can create users with these roles
+                foreach (var role in createUserDto.Roles)
+                {
+                    if (!CanCreateUserWithRole(currentUser, role))
+                    {
+                        throw new SecurityException($"You don't have permission to create users with the {role} role");
+                    }
+                }
+
+                // Proceed with the existing implementation
+                return await CreateUserAsync(createUserDto);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in CreateUserAsync with permission check");
+                throw;
+            }
+        }
+
+        // Update user with permission check
+        public async Task<AdminUserDto?> UpdateUserAsync(string currentUserId, string id, AdminUpdateUserDto updateUserDto)
+        {
+            try
+            {
+                var currentUser = await GetCurrentUserAsync(currentUserId);
+                var targetUser = await _userRepository.GetUserByIdAsync(id);
+
+                if (targetUser == null)
+                {
+                    return null;
+                }
+
+                // Check if the current user can edit this user
+                if (!CanEditUser(currentUser, targetUser))
+                {
+                    throw new SecurityException("You don't have permission to edit this user");
+                }
+
+                // Check if trying to add roles without permission
+                foreach (var role in updateUserDto.Roles)
+                {
+                    if (!CanCreateUserWithRole(currentUser, role))
+                    {
+                        throw new SecurityException($"You don't have permission to assign the {role} role");
+                    }
+                }
+
+                // Proceed with the existing implementation
+                return await UpdateUserAsync(id, updateUserDto);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error in UpdateUserAsync with permission check for user ID: {id}");
+                throw;
+            }
+        }
+
+        // Delete user with permission check
+        public async Task<bool> DeleteUserAsync(string currentUserId, string id)
+        {
+            try
+            {
+                var currentUser = await GetCurrentUserAsync(currentUserId);
+                var targetUser = await _userRepository.GetUserByIdAsync(id);
+
+                if (targetUser == null)
+                {
+                    return false;
+                }
+
+                // Check if the current user can delete this user
+                if (!CanDeleteUser(currentUser, targetUser))
+                {
+                    throw new SecurityException("You don't have permission to delete this user");
+                }
+
+                // Proceed with the existing implementation
+                return await DeleteUserAsync(id);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error in DeleteUserAsync with permission check for user ID: {id}");
+                throw;
+            }
+        }
+
+        // Toggle user status with permission check
+        public async Task<AdminUserDto?> ToggleUserStatusAsync(string currentUserId, string id)
+        {
+            try
+            {
+                var currentUser = await GetCurrentUserAsync(currentUserId);
+                var targetUser = await _userRepository.GetUserByIdAsync(id);
+
+                if (targetUser == null)
+                {
+                    return null;
+                }
+
+                // Check if the current user can edit this user
+                if (!CanEditUser(currentUser, targetUser))
+                {
+                    throw new SecurityException("You don't have permission to change this user's status");
+                }
+
+                // Proceed with the existing implementation
+                return await ToggleUserStatusAsync(id);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error in ToggleUserStatusAsync with permission check for user ID: {id}");
+                throw;
+            }
+        }
+
+        // Promote a user to SuperAdmin
+        public async Task<AdminUserDto?> PromoteToSuperAdminAsync(string currentUserId, string targetUserId)
+        {
+            try
+            {
+                var currentUser = await GetCurrentUserAsync(currentUserId);
+
+                // Only SuperAdmin can promote others to SuperAdmin
+                if (!IsSuperAdmin(currentUser))
+                {
+                    throw new SecurityException("Only SuperAdmin can promote users to SuperAdmin role");
+                }
+
+                var targetUser = await _userRepository.GetUserByIdAsync(targetUserId);
+                if (targetUser == null)
+                {
+                    return null;
+                }
+
+                // Add SuperAdmin role if not already present
+                if (!targetUser.Roles.Contains(SUPER_ADMIN_ROLE))
+                {
+                    targetUser.Roles.Add(SUPER_ADMIN_ROLE);
+                    await _userRepository.UpdateUserAsync(targetUser);
+                    _logger.LogInformation($"User {targetUser.Email} promoted to SuperAdmin");
+                }
+
+                return MapToAdminUserDto(targetUser);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error promoting user {targetUserId} to SuperAdmin");
+                throw;
+            }
+        }
+
+        #endregion
+
+        #region Helper Methods
+
         // Generate a secure temporary password
         private string GenerateTemporaryPassword()
         {
@@ -486,7 +747,8 @@ namespace ExcellyGenLMS.Application.Services.Admin
         // Check if a role name is already properly formatted
         private bool IsProperlyFormatted(string role)
         {
-            string[] validFormats = { "Admin", "Learner", "CourseCoordinator", "ProjectManager" };
+            // Updated to include SuperAdmin role
+            string[] validFormats = { "Admin", "Learner", "CourseCoordinator", "ProjectManager", "SuperAdmin" };
             return validFormats.Contains(role);
         }
 
@@ -576,5 +838,7 @@ namespace ExcellyGenLMS.Application.Services.Admin
 
             return result;
         }
+
+        #endregion
     }
 }
