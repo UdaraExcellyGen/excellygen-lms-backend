@@ -44,6 +44,7 @@ namespace ExcellyGenLMS.Infrastructure.Data
         public DbSet<UserProject> UserProjects { get; set; } = null!;
         public DbSet<Certification> Certifications { get; set; } = null!;
         public DbSet<UserCertification> UserCertifications { get; set; } = null!;
+        public DbSet<LearnerNotification> LearnerNotifications { get; set; } = null!; // ADDED
 
         // Notification Module
         public DbSet<Notification> Notifications { get; set; } = null!;
@@ -261,7 +262,6 @@ namespace ExcellyGenLMS.Infrastructure.Data
                     .OnDelete(DeleteBehavior.Cascade);
             });
 
-
             // Configure Project entity
             modelBuilder.Entity<Project>().HasKey(e => e.Id);
 
@@ -306,6 +306,30 @@ namespace ExcellyGenLMS.Infrastructure.Data
                 .WithMany(c => c.UserCertifications)
                 .HasForeignKey(e => e.CertificationId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            // Configure LearnerNotification entity
+            modelBuilder.Entity<LearnerNotification>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Title).HasMaxLength(200).IsRequired();
+                entity.Property(e => e.Message).HasMaxLength(500).IsRequired();
+                entity.Property(e => e.Type).HasMaxLength(50).IsRequired();
+                entity.Property(e => e.ProjectName).HasMaxLength(200);
+                entity.Property(e => e.AssignerName).HasMaxLength(100);
+                entity.Property(e => e.Role).HasMaxLength(100);
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
+                entity.Property(e => e.IsRead).HasDefaultValue(false);
+
+                // Relationship: LearnerNotification -> User
+                entity.HasOne(e => e.User)
+                    .WithMany()
+                    .HasForeignKey(e => e.UserId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                // Index for better query performance
+                entity.HasIndex(e => new { e.UserId, e.IsRead });
+                entity.HasIndex(e => e.CreatedAt);
+            });
 
             // Configure Notification entity
             modelBuilder.Entity<Notification>(entity =>
