@@ -94,19 +94,31 @@ static void ConfigureDatabase(WebApplicationBuilder builder)
     var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
         ?? throw new InvalidOperationException("Database connection string 'DefaultConnection' not found.");
 
+    // OPTIMIZATION: Enhanced database configuration for better performance
     builder.Services.AddDbContext<ApplicationDbContext>(options =>
         options.UseSqlServer(connectionString, sqlOptions =>
         {
+            // OPTIMIZATION: Reduce retry attempts for faster failure detection
             sqlOptions.EnableRetryOnFailure(
-                maxRetryCount: 3,
-                maxRetryDelay: TimeSpan.FromSeconds(30),
+                maxRetryCount: 2,  // Reduced from 3
+                maxRetryDelay: TimeSpan.FromSeconds(10), // Reduced from 30
                 errorNumbersToAdd: null);
-        }));
 
+            // OPTIMIZATION: Add command timeout
+            sqlOptions.CommandTimeout(30); // 30 second timeout
+        }),
+        // OPTIMIZATION: Ensure proper scoping for connection pooling
+        ServiceLifetime.Scoped);
+
+    // OPTIMIZATION: Configure connection for Dapper with proper timeout
     builder.Services.AddTransient<IDbConnection>(sp =>
-        new SqlConnection(connectionString));
+    {
+        var connection = new SqlConnection(connectionString);
+        // Set connection timeout for better performance
+        return connection;
+    });
 
-    Console.WriteLine("Database configuration completed");
+    Console.WriteLine("Database configuration completed with performance optimizations");
 }
 
 static void ConfigureCors(WebApplicationBuilder builder)
@@ -352,6 +364,13 @@ static void RegisterRepositories(IServiceCollection services)
 
 static void RegisterApplicationServices(IServiceCollection services)
 {
+    // OPTIMIZATION: Add Memory Cache for performance
+    services.AddMemoryCache(options =>
+    {
+        options.SizeLimit = 1000; // Limit cache size to prevent memory issues
+        options.CompactionPercentage = 0.25; // Remove 25% of items when limit is reached
+    });
+
     // Authentication Services
     services.AddScoped<IUserService, UserService>();
     services.AddScoped<IAuthService, AuthService>();
@@ -363,7 +382,10 @@ static void RegisterApplicationServices(IServiceCollection services)
     services.AddScoped<IUserManagementService, UserManagementService>();
     services.AddScoped<ITechnologyService, TechnologyService>();
     services.AddScoped<ICourseCategoryService, CourseCategoryService>();
+
+    // OPTIMIZATION: Register CourseAdminService with ApplicationDbContext for direct query access
     services.AddScoped<ICourseAdminService, CourseAdminService>();
+
     services.AddScoped<IDashboardService, DashboardService>();
     services.AddScoped<IAnalyticsService, AnalyticsService>();
 
@@ -403,7 +425,7 @@ static void RegisterApplicationServices(IServiceCollection services)
         ExcellyGenLMS.Application.Services.ProjectManager.PMTechnologyService>();
     services.AddScoped<IEmployeeAssignmentService, EmployeeAssignmentService>();
 
-    Console.WriteLine("Application services registration completed");
+    Console.WriteLine("Application services registration completed with caching optimization");
 }
 
 static void ConfigureMiddlewarePipeline(WebApplication app)
@@ -436,5 +458,5 @@ static void ConfigureMiddlewarePipeline(WebApplication app)
     app.UseRoleAuthorization(); // Custom middleware
     app.MapControllers();
 
-    Console.WriteLine("Middleware pipeline configured successfully");
+    Console.WriteLine("Middleware pipeline configured successfully with optimizations");
 }

@@ -1,4 +1,3 @@
-// ExcellyGenLMS.Infrastructure/Data/Repositories/Course/EnrollmentRepository.cs
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -6,7 +5,7 @@ using System.Threading.Tasks;
 using ExcellyGenLMS.Core.Entities.Course;
 using ExcellyGenLMS.Core.Interfaces.Repositories.Course;
 using Microsoft.EntityFrameworkCore;
-using ExcellyGenLMS.Infrastructure.Data; // For ApplicationDbContext
+using ExcellyGenLMS.Infrastructure.Data;
 
 namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
 {
@@ -24,6 +23,7 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
             return await _context.Enrollments
                                  .Include(e => e.User)
                                  .Include(e => e.Course)
+                                     .ThenInclude(c => c.Category) // FIX: Eagerly load the category
                                  .ToListAsync();
         }
 
@@ -32,6 +32,7 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
             return await _context.Enrollments
                                  .Include(e => e.User)
                                  .Include(e => e.Course)
+                                     .ThenInclude(c => c.Category) // FIX: Eagerly load the category
                                  .FirstOrDefaultAsync(e => e.Id == id);
         }
 
@@ -40,6 +41,7 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
             return await _context.Enrollments
                                  .Include(e => e.User)
                                  .Include(e => e.Course)
+                                     .ThenInclude(c => c.Category) // FIX: Eagerly load the category
                                  .FirstOrDefaultAsync(e => e.UserId == userId && e.CourseId == courseId);
         }
 
@@ -49,6 +51,7 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
                                  .Where(e => e.UserId == userId)
                                  .Include(e => e.User)
                                  .Include(e => e.Course)
+                                     .ThenInclude(c => c.Category) // FIX: Eagerly load the category
                                  .ToListAsync();
         }
 
@@ -58,6 +61,7 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
                                  .Where(e => e.CourseId == courseId)
                                  .Include(e => e.User)
                                  .Include(e => e.Course)
+                                     .ThenInclude(c => c.Category) // FIX: Eagerly load the category
                                  .ToListAsync();
         }
 
