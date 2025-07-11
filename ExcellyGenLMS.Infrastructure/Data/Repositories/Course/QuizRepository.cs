@@ -58,6 +58,15 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
                                  .ToListAsync();
         }
 
+        public async Task<IEnumerable<Quiz>> GetQuizzesByCourseIdAsync(int courseId)
+        {
+            return await _context.Quizzes
+                .Where(q => q.Lesson.CourseId == courseId)
+                .Include(q => q.Lesson)
+                .AsNoTracking()
+                .ToListAsync();
+        }
+
         public async Task<Quiz?> GetQuizByLessonIdAsync(int lessonId)
         {
             return await _context.Quizzes

@@ -15,15 +15,18 @@ namespace ExcellyGenLMS.Application.Services.Course
     {
         private readonly IQuizRepository _quizRepository;
         private readonly ILessonRepository _lessonRepository;
+        private readonly ICourseRepository _courseRepository;
         private readonly ILogger<QuizService> _logger;
 
         public QuizService(
             IQuizRepository quizRepository,
             ILessonRepository lessonRepository,
+            ICourseRepository courseRepository,
             ILogger<QuizService> logger)
         {
             _quizRepository = quizRepository ?? throw new ArgumentNullException(nameof(quizRepository));
             _lessonRepository = lessonRepository ?? throw new ArgumentNullException(nameof(lessonRepository));
+            _courseRepository = courseRepository ?? throw new ArgumentNullException(nameof(courseRepository));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -86,6 +89,36 @@ namespace ExcellyGenLMS.Application.Services.Course
         {
             var quizzes = await _quizRepository.GetQuizzesByLessonIdAsync(lessonId);
             return quizzes.Select(MapQuizToDto);
+        }
+
+        public async Task<IEnumerable<QuizDto>> GetQuizzesByCourseIdAsync(int courseId)
+        {
+            try
+            {
+                _logger.LogInformation($"Getting all quizzes for course ID: {courseId}");
+
+                // Get all lessons for the course
+                var lessons = await _courseRepository.GetLessonsByCourseIdAsync(courseId);
+                var allQuizzes = new List<Quiz>();
+
+                // Get quiz for each lesson (assuming one quiz per lesson)
+                foreach (var lesson in lessons)
+                {
+                    var quiz = await _quizRepository.GetQuizByLessonIdAsync(lesson.Id);
+                    if (quiz != null)
+                    {
+                        allQuizzes.Add(quiz);
+                    }
+                }
+
+                _logger.LogInformation($"Found {allQuizzes.Count} quizzes for course {courseId}");
+                return allQuizzes.Select(MapQuizToDto);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error getting quizzes for course ID: {courseId}");
+                throw;
+            }
         }
 
         public async Task<QuizDto> CreateQuizAsync(CreateQuizDto createQuizDto)
@@ -271,7 +304,6 @@ namespace ExcellyGenLMS.Application.Services.Course
             return MapQuestionToDto(refreshedQuestion!);
         }
 
-        // MODIFIED: Update question logic to handle existing quiz attempts
         public async Task UpdateQuizBankQuestionAsync(int questionId, UpdateQuizBankQuestionDto updateQuestionDto)
         {
             try
@@ -380,7 +412,6 @@ namespace ExcellyGenLMS.Application.Services.Course
             await _quizRepository.DeleteQuizBankQuestionAsync(questionId);
         }
 
-        // FIXED: Learner-facing quiz methods with better error handling and logging
         public async Task<IEnumerable<LearnerQuizQuestionDto>> GetQuestionsForLearnerQuizAsync(int quizId)
         {
             try

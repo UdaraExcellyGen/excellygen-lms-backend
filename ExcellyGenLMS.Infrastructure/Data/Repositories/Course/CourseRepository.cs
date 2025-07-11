@@ -6,8 +6,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using ExcellyGenLMS.Core.Enums; // For CourseStatus
-using ExcellyGenLMS.Infrastructure.Data; // For ApplicationDbContext
+using ExcellyGenLMS.Core.Enums;
+using ExcellyGenLMS.Infrastructure.Data;
 
 namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
 {
@@ -28,54 +28,59 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
         public async Task<Core.Entities.Course.Course?> GetByIdWithDetailsAsync(int id)
         {
             return await _context.Courses
-                                 .Include(c => c.Category)
-                                 .Include(c => c.Creator)
-                                 .Include(c => c.CourseTechnologies)
-                                     .ThenInclude(ct => ct.Technology)
-                                 .Include(c => c.Lessons)
-                                     .ThenInclude(l => l.Documents)
-                                 .FirstOrDefaultAsync(c => c.Id == id);
+                .Include(c => c.Category)
+                .Include(c => c.Creator)
+                .Include(c => c.CourseTechnologies)
+                    .ThenInclude(ct => ct.Technology)
+                .Include(c => c.Lessons)
+                    .ThenInclude(l => l.Documents)
+                .AsSplitQuery() // OPTIMIZATION: Use split query for multiple includes
+                .FirstOrDefaultAsync(c => c.Id == id);
         }
 
         public async Task<IEnumerable<Core.Entities.Course.Course>> GetAllAsync()
         {
             return await _context.Courses
-                                 .Include(c => c.Category)
-                                 .Include(c => c.Creator)
-                                 .Include(c => c.CourseTechnologies)
-                                     .ThenInclude(ct => ct.Technology)
-                                 .OrderBy(c => c.Title)
-                                 .ToListAsync();
+                .Include(c => c.Category)
+                .Include(c => c.Creator)
+                .Include(c => c.CourseTechnologies)
+                    .ThenInclude(ct => ct.Technology)
+                .AsNoTracking()
+                .OrderBy(c => c.Title)
+                .ToListAsync();
         }
 
         public async Task<IEnumerable<Core.Entities.Course.Course>> GetAllPublishedCoursesWithDetailsAsync()
         {
             return await _context.Courses
-                                 .Where(c => c.Status == CourseStatus.Published)
-                                 .Include(c => c.Category)
-                                 .Include(c => c.Creator)
-                                 .Include(c => c.CourseTechnologies)
-                                     .ThenInclude(ct => ct.Technology)
-                                 .Include(c => c.Lessons)
-                                     .ThenInclude(l => l.Documents)
-                                 .OrderBy(c => c.Title)
-                                 .ToListAsync();
+                .Where(c => c.Status == CourseStatus.Published)
+                .Include(c => c.Category)
+                .Include(c => c.Creator)
+                .Include(c => c.CourseTechnologies)
+                    .ThenInclude(ct => ct.Technology)
+                .Include(c => c.Lessons)
+                    .ThenInclude(l => l.Documents)
+                .AsSplitQuery() // OPTIMIZATION: Use split query for better performance
+                .AsNoTracking()
+                .OrderBy(c => c.Title)
+                .ToListAsync();
         }
 
         public async Task<IEnumerable<Lesson>> GetLessonsByCourseIdAsync(int courseId)
         {
             return await _context.Lessons
-                                 .Where(l => l.CourseId == courseId)
-                                 .Include(l => l.Documents)
-                                 .OrderBy(l => l.Id)
-                                 .ToListAsync();
+                .Where(l => l.CourseId == courseId)
+                .Include(l => l.Documents)
+                .AsNoTracking()
+                .OrderBy(l => l.Id)
+                .ToListAsync();
         }
 
         public async Task<Lesson?> GetLessonWithDocumentsAsync(int lessonId)
         {
             return await _context.Lessons
-                                 .Include(l => l.Documents)
-                                 .FirstOrDefaultAsync(l => l.Id == lessonId);
+                .Include(l => l.Documents)
+                .FirstOrDefaultAsync(l => l.Id == lessonId);
         }
 
         public async Task<Core.Entities.Course.Course> AddAsync(Core.Entities.Course.Course course)
@@ -111,7 +116,7 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
         public async Task RemoveTechnologyAsync(int courseId, string technologyId)
         {
             var courseTechnology = await _context.CourseTechnologies
-                                                 .FirstOrDefaultAsync(ct => ct.CourseId == courseId && ct.TechnologyId == technologyId);
+                .FirstOrDefaultAsync(ct => ct.CourseId == courseId && ct.TechnologyId == technologyId);
             if (courseTechnology != null)
             {
                 _context.CourseTechnologies.Remove(courseTechnology);
@@ -122,32 +127,35 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
         public async Task<IEnumerable<CourseTechnology>> GetCourseTechnologiesAsync(int courseId)
         {
             return await _context.CourseTechnologies
-                                 .Where(ct => ct.CourseId == courseId)
-                                 .Include(ct => ct.Technology)
-                                 .ToListAsync();
+                .Where(ct => ct.CourseId == courseId)
+                .Include(ct => ct.Technology)
+                .AsNoTracking()
+                .ToListAsync();
         }
 
         public async Task ClearTechnologiesAsync(int courseId)
         {
             var existingTechnologies = await _context.CourseTechnologies
-                                                     .Where(ct => ct.CourseId == courseId)
-                                                     .ToListAsync();
+                .Where(ct => ct.CourseId == courseId)
+                .ToListAsync();
             _context.CourseTechnologies.RemoveRange(existingTechnologies);
             await _context.SaveChangesAsync();
         }
 
         public async Task<int> GetTotalPublishedCoursesCountAsync()
         {
-            return await _context.Courses.CountAsync(c => c.Status == Core.Enums.CourseStatus.Published);
+            return await _context.Courses
+                .AsNoTracking()
+                .CountAsync(c => c.Status == Core.Enums.CourseStatus.Published);
         }
 
         public async Task<TimeSpan?> GetOverallAverageCourseDurationAsync()
         {
             var averageHours = await _context.Courses
-                                             .AsNoTracking()
-                                             .Where(c => c.Status == Core.Enums.CourseStatus.Published)
-                                             .Select(c => (double?)c.EstimatedTime)
-                                             .AverageAsync();
+                .AsNoTracking()
+                .Where(c => c.Status == Core.Enums.CourseStatus.Published)
+                .Select(c => (double?)c.EstimatedTime)
+                .AverageAsync();
             return averageHours.HasValue ? TimeSpan.FromHours(averageHours.Value) : (TimeSpan?)null;
         }
     }
