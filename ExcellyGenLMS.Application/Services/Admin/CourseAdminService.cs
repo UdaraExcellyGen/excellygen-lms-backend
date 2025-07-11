@@ -30,9 +30,24 @@ namespace ExcellyGenLMS.Application.Services.Admin
             return courses.Select(course => MapToDto(course)).ToList();
         }
 
+        public async Task<AdminCategoryStatsDto> GetCategoryStatsAsync(string categoryId)
+        {
+            _logger.LogInformation("AdminService: Getting stats for category {CategoryId}", categoryId);
+            var courses = await _courseAdminRepository.GetCoursesByCategoryIdAsync(categoryId);
+            var totalCourses = courses.Count;
+            var averageTime = courses.Any() ? courses.Average(c => c.EstimatedTime) : 0;
+            return new AdminCategoryStatsDto
+            {
+                TotalCourses = totalCourses,
+                TotalLearners = 0, // Placeholder, can be implemented later
+                AverageTime = averageTime
+            };
+        }
+
         public async Task<CourseDto> UpdateCourseAdminAsync(int id, UpdateCourseAdminDto updateCourseDto)
         {
             _logger.LogInformation("AdminService: Updating course {CourseId}", id);
+
             var course = await _courseAdminRepository.GetCourseByIdAsync(id);
 
             if (course == null)
@@ -41,17 +56,32 @@ namespace ExcellyGenLMS.Application.Services.Admin
                 throw new KeyNotFoundException($"Course with ID {id} not found");
             }
 
+            // Update the basic fields from the DTO
             course.Title = updateCourseDto.Title;
             course.Description = updateCourseDto.Description;
             course.LastUpdatedDate = DateTime.UtcNow;
 
-            var updatedCourse = await _courseAdminRepository.UpdateCourseAsync(course);
-            _logger.LogInformation("AdminService: Course {CourseId} updated.", id);
+            // =========================================================
+            // THIS IS THE FIX: This logic updates the course's category
+            // =========================================================
+            if (!string.IsNullOrEmpty(updateCourseDto.CategoryId))
+            {
+                course.CategoryId = updateCourseDto.CategoryId;
+                _logger.LogInformation("AdminService: Updating CategoryId for course {CourseId} to {CategoryId}", id, updateCourseDto.CategoryId);
+            }
+            else
+            {
+                _logger.LogWarning("AdminService: CategoryId was not provided in the update DTO for course {CourseId}. The category will not be changed.", id);
+            }
 
+            var updatedCourse = await _courseAdminRepository.UpdateCourseAsync(course);
+            _logger.LogInformation("AdminService: Course {CourseId} updated successfully in the database.", id);
+
+            // Re-fetch the course to ensure all details are current for the response
             var resultCourse = await _courseAdminRepository.GetCourseByIdAsync(updatedCourse.Id);
             if (resultCourse == null)
             {
-                _logger.LogError("AdminService: Failed to re-fetch course {CourseId} after update.", id);
+                _logger.LogError("AdminService: CRITICAL - Failed to re-fetch course {CourseId} immediately after update.", id);
                 throw new InvalidOperationException("Failed to retrieve course details after update.");
             }
 
@@ -71,47 +101,43 @@ namespace ExcellyGenLMS.Application.Services.Admin
             _logger.LogInformation("AdminService: Course {CourseId} deleted.", id);
         }
 
-        // Resolved merged method
+        // This is a helper method to map the database entity to a DTO for the frontend
         private static CourseDto MapToDto(ExcellyGenLMS.Core.Entities.Course.Course course)
         {
             if (course == null) return null!;
 
-            // Map Creator to UserBasicDto (as expected by CourseDto)
             UserBasicDto creatorDto = course.Creator != null
                 ? new UserBasicDto { Id = course.Creator.Id, Name = course.Creator.Name }
                 : new UserBasicDto { Id = string.Empty, Name = "N/A" };
 
-            // Map Category to CategoryDto
             CategoryDto categoryDto = course.Category != null
                 ? new CategoryDto { Id = course.Category.Id, Title = course.Category.Title }
                 : new CategoryDto { Id = string.Empty, Title = "N/A" };
 
-            // Map Technologies
             List<ExcellyGenLMS.Application.DTOs.Course.TechnologyDto> techDtos = course.CourseTechnologies?
                 .Where(ct => ct.Technology != null)
                 .Select(ct => new ExcellyGenLMS.Application.DTOs.Course.TechnologyDto { Id = ct.Technology!.Id, Name = ct.Technology!.Name })
                 .ToList() ?? new List<ExcellyGenLMS.Application.DTOs.Course.TechnologyDto>();
 
-            // Map Lessons (and potentially nested documents if needed and included)
             List<LessonDto> lessonDtos = course.Lessons?
-               .Select(l => new LessonDto
-               {
-                   Id = l.Id,
-                   LessonName = l.LessonName,
-                   LessonPoints = l.LessonPoints,
-                   LastUpdatedDate = l.LastUpdatedDate,
-                   CourseId = l.CourseId,
-                   Documents = l.Documents?.Select(d => new CourseDocumentDto
-                   {
-                       Id = d.Id,
-                       Name = d.Name,
-                       DocumentType = d.DocumentType,
-                       FileSize = d.FileSize,
-                       FileUrl = "[URL Generation Required]",
-                       LastUpdatedDate = d.LastUpdatedDate,
-                       LessonId = d.LessonId
-                   }).ToList() ?? new List<CourseDocumentDto>()
-               }).ToList() ?? new List<LessonDto>();
+                .Select(l => new LessonDto
+                {
+                    Id = l.Id,
+                    LessonName = l.LessonName,
+                    LessonPoints = l.LessonPoints,
+                    LastUpdatedDate = l.LastUpdatedDate,
+                    CourseId = l.CourseId,
+                    Documents = l.Documents?.Select(d => new CourseDocumentDto
+                    {
+                        Id = d.Id,
+                        Name = d.Name,
+                        DocumentType = d.DocumentType,
+                        FileSize = d.FileSize,
+                        FileUrl = "[URL Generation Required]", // Placeholder
+                        LastUpdatedDate = d.LastUpdatedDate,
+                        LessonId = d.LessonId
+                    }).ToList() ?? new List<CourseDocumentDto>()
+                }).ToList() ?? new List<LessonDto>();
 
             return new CourseDto
             {
@@ -123,12 +149,20 @@ namespace ExcellyGenLMS.Application.Services.Admin
                 CreatedAt = course.CreatedAt,
                 LastUpdatedDate = course.LastUpdatedDate,
                 Status = course.Status,
-                ThumbnailUrl = "[URL Generation Required]",
+                ThumbnailUrl = "[URL Generation Required]", // Placeholder
                 Category = categoryDto,
                 Creator = creatorDto,
                 Technologies = techDtos,
                 Lessons = lessonDtos,
             };
         }
+    }
+
+    // This DTO can be moved to its own file later if needed
+    public class AdminCategoryStatsDto
+    {
+        public int TotalCourses { get; set; }
+        public int TotalLearners { get; set; }
+        public double AverageTime { get; set; }
     }
 }

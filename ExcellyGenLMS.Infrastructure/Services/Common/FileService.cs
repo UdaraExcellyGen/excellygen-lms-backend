@@ -57,17 +57,38 @@ namespace ExcellyGenLMS.Infrastructure.Services.Common
                 return relativePath;
             }
 
-            // If it's a legacy local path, convert to base URL
-            if (relativePath.StartsWith("/uploads/"))
+            // If it's already a full HTTP URL, return as is
+            if (relativePath.StartsWith("http"))
             {
-                var baseUrl = GetBaseUrl();
-                return $"{baseUrl}{relativePath}";
+                return relativePath;
             }
 
-            // For relative Firebase paths, construct the full URL
-            return relativePath.StartsWith("http")
-                ? relativePath
-                : $"https://firebasestorage.googleapis.com/v0/b/{_firebaseBucket}/o/{Uri.EscapeDataString(relativePath)}?alt=media";
+            // Handle legacy local paths - FIXED to handle both /uploads/ and /avatars/
+            if (relativePath.StartsWith("/uploads/") || relativePath.StartsWith("/avatars/"))
+            {
+                _logger.LogWarning("Found legacy local path: {Path}. Converting to placeholder since wwwroot is disabled.", relativePath);
+
+                // Check if it's a default avatar
+                if (relativePath.Contains("default.jpg") || relativePath.Contains("default.png"))
+                {
+                    // Return a nice default avatar placeholder
+                    return "https://ui-avatars.com/api/?name=User&background=BF4BF6&color=FFFFFF&size=150&rounded=true";
+                }
+
+                // For other legacy paths, return a placeholder with user initials
+                return "https://ui-avatars.com/api/?name=User&background=52007C&color=FFFFFF&size=150&rounded=true";
+            }
+
+            // For relative Firebase paths (like "avatars/filename.jpg"), construct the full URL
+            if (!relativePath.StartsWith("/"))
+            {
+                var encodedPath = Uri.EscapeDataString(relativePath);
+                return $"https://firebasestorage.googleapis.com/v0/b/{_firebaseBucket}/o/{encodedPath}?alt=media";
+            }
+
+            // Fallback: return placeholder
+            _logger.LogWarning("Unknown path format: {Path}. Using placeholder.", relativePath);
+            return "https://ui-avatars.com/api/?name=User&background=7A00B8&color=FFFFFF&size=150&rounded=true";
         }
 
         public async Task<string> SaveFileAsync(IFormFile file, string subFolder)
@@ -86,10 +107,8 @@ namespace ExcellyGenLMS.Infrastructure.Services.Common
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error uploading file to Firebase Storage, falling back to local storage");
-
-                // Fallback to local storage if Firebase fails
-                return await SaveFileLocallyAsync(file, subFolder);
+                _logger.LogError(ex, "Error uploading file to Firebase Storage");
+                throw; // Don't fallback to local storage since wwwroot is disabled
             }
         }
 
@@ -154,46 +173,6 @@ namespace ExcellyGenLMS.Infrastructure.Services.Common
             }
         }
 
-        private async Task<string> SaveFileLocallyAsync(IFormFile file, string subFolder)
-        {
-            _logger.LogWarning("Using local storage fallback for file: {FileName}", file.FileName);
-
-            // Original local file saving logic as fallback
-            var fileName = $"{Guid.NewGuid()}{Path.GetExtension(file.FileName)}";
-            var uploadPath = Path.Combine(_webHostEnvironment.WebRootPath, "uploads", subFolder);
-
-            // Create directory if it doesn't exist
-            if (!Directory.Exists(_webHostEnvironment.WebRootPath))
-            {
-                Directory.CreateDirectory(_webHostEnvironment.WebRootPath);
-                _logger.LogInformation("Created web root directory: {WebRootPath}", _webHostEnvironment.WebRootPath);
-            }
-
-            var uploadsDir = Path.Combine(_webHostEnvironment.WebRootPath, "uploads");
-            if (!Directory.Exists(uploadsDir))
-            {
-                Directory.CreateDirectory(uploadsDir);
-                _logger.LogInformation("Created uploads directory: {UploadsDir}", uploadsDir);
-            }
-
-            if (!Directory.Exists(uploadPath))
-            {
-                Directory.CreateDirectory(uploadPath);
-                _logger.LogInformation("Created subdirectory: {UploadPath}", uploadPath);
-            }
-
-            var filePath = Path.Combine(uploadPath, fileName);
-
-            // Save the file
-            using (var fileStream = new FileStream(filePath, FileMode.Create))
-            {
-                await file.CopyToAsync(fileStream);
-            }
-
-            _logger.LogInformation("File saved locally: {FilePath}", filePath);
-            return $"/uploads/{subFolder}/{fileName}";
-        }
-
         public Task DeleteFileAsync(string? relativePath)
         {
             if (string.IsNullOrEmpty(relativePath))
@@ -209,10 +188,10 @@ namespace ExcellyGenLMS.Infrastructure.Services.Common
                     {
                         await DeleteFromFirebaseStorageAsync(relativePath);
                     }
-                    else if (relativePath.StartsWith("/uploads/"))
+                    else if (relativePath.StartsWith("/uploads/") || relativePath.StartsWith("/avatars/"))
                     {
-                        // Legacy local file deletion
-                        await DeleteLocalFileAsync(relativePath);
+                        // Legacy local files - nothing to delete since wwwroot is disabled
+                        _logger.LogInformation("Skipping deletion of legacy local file: {RelativePath}", relativePath);
                     }
                     else
                     {
@@ -264,27 +243,6 @@ namespace ExcellyGenLMS.Infrastructure.Services.Common
                 _logger.LogError(ex, "Error deleting from Firebase Storage: {Url}", firebaseUrl);
                 throw;
             }
-        }
-
-        private Task DeleteLocalFileAsync(string relativePath)
-        {
-            try
-            {
-                var path = relativePath.TrimStart('/');
-                var fullPath = Path.Combine(_webHostEnvironment.WebRootPath, path);
-
-                if (File.Exists(fullPath))
-                {
-                    File.Delete(fullPath);
-                    _logger.LogInformation("Deleted local file: {FilePath}", fullPath);
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error deleting local file: {RelativePath}", relativePath);
-            }
-
-            return Task.CompletedTask;
         }
     }
 }

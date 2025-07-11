@@ -28,5 +28,8 @@ namespace ExcellyGenLMS.Application.Interfaces.Course
 
         // Learner-facing quiz methods
         Task<IEnumerable<LearnerQuizQuestionDto>> GetQuestionsForLearnerQuizAsync(int quizId);
+
+        // Course-level quiz methods
+        Task<IEnumerable<QuizDto>> GetQuizzesByCourseIdAsync(int courseId);
     }
 }
