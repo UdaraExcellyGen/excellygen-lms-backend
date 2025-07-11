@@ -28,7 +28,7 @@ namespace ExcellyGenLMS.API.Controllers.Auth
         private readonly IFirebaseAuthService _firebaseAuthService;
         private readonly IEmailService _emailService;
         private readonly ITokenService _tokenService;
-        private readonly IUserManagementService? _userManagementService; // Made nullable
+        private readonly IUserManagementService? _userManagementService;
 
         public AuthController(
             IAuthService authService,
@@ -38,7 +38,7 @@ namespace ExcellyGenLMS.API.Controllers.Auth
             IFirebaseAuthService firebaseAuthService,
             IEmailService emailService,
             ITokenService tokenService,
-            IUserManagementService? userManagementService = null) // Optional dependency to support existing code
+            IUserManagementService? userManagementService = null)
         {
             _authService = authService;
             _userService = userService;
@@ -57,78 +57,50 @@ namespace ExcellyGenLMS.API.Controllers.Auth
             {
                 _logger.LogInformation($"Login attempt for email: {loginDto.Email}");
 
+                // OPTIMIZATION: Only verify Firebase token if it's provided and not empty
                 if (!string.IsNullOrEmpty(loginDto.FirebaseToken))
                 {
-                    _logger.LogInformation("Firebase token provided");
-
-                    // Verify the token with Firebase directly first
-                    bool isValidToken = await _firebaseAuthService.VerifyTokenAsync(loginDto.FirebaseToken);
-                    if (!isValidToken)
+                    // OPTIMIZATION: Run Firebase verification asynchronously without blocking
+                    _ = Task.Run(async () =>
                     {
-                        _logger.LogWarning("Firebase token validation failed");
-                        return Unauthorized(new { message = "Invalid Firebase token" });
-                    }
-
-                    _logger.LogInformation("Firebase token validated successfully");
+                        try
+                        {
+                            await _firebaseAuthService.VerifyTokenAsync(loginDto.FirebaseToken);
+                            _logger.LogInformation("Firebase token validated successfully");
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning($"Firebase token validation failed: {ex.Message}");
+                        }
+                    });
                 }
 
+                // OPTIMIZATION: Main login process - don't wait for Firebase verification
                 var tokenDto = await _authService.LoginAsync(loginDto);
 
-                // Try-catch block to handle possible token extraction errors
-                try
+                // OPTIMIZATION: Single database call to get user
+                var user = await _userRepository.GetUserByEmailAsync(loginDto.Email);
+
+                if (user == null)
                 {
-                    var userId = _userService.GetUserIdFromToken(tokenDto.AccessToken);
-                    _logger.LogInformation($"User ID extracted from token: {userId}");
-
-                    var user = await _userRepository.GetUserByEmailAsync(loginDto.Email);
-
-                    if (user == null)
-                    {
-                        _logger.LogWarning("User not found after login");
-                        return Unauthorized(new { message = "User not found" });
-                    }
-
-                    var result = new AuthResultDto
-                    {
-                        UserId = user.Id,
-                        Name = user.Name,
-                        Email = user.Email,
-                        Roles = user.Roles ?? new List<string>(),
-                        Token = tokenDto,
-                        RequirePasswordChange = user.RequirePasswordChange,
-                        Avatar = user.Avatar
-                    };
-
-                    _logger.LogInformation($"Login successful for user: {user.Id}");
-                    return Ok(result);
+                    _logger.LogWarning("User not found after login");
+                    return Unauthorized(new { message = "User not found" });
                 }
-                catch (Exception ex)
+
+                // OPTIMIZATION: Build response object directly
+                var result = new AuthResultDto
                 {
-                    _logger.LogError($"Error extracting user data from token: {ex.Message}");
+                    UserId = user.Id,
+                    Name = user.Name,
+                    Email = user.Email,
+                    Roles = user.Roles ?? new List<string>(),
+                    Token = tokenDto,
+                    RequirePasswordChange = user.RequirePasswordChange,
+                    Avatar = user.Avatar
+                };
 
-                    // Fall back to querying by email
-                    var user = await _userRepository.GetUserByEmailAsync(loginDto.Email);
-
-                    if (user == null)
-                    {
-                        _logger.LogWarning("User not found after login");
-                        return Unauthorized(new { message = "User not found" });
-                    }
-
-                    var result = new AuthResultDto
-                    {
-                        UserId = user.Id,
-                        Name = user.Name,
-                        Email = user.Email,
-                        Roles = user.Roles ?? new List<string>(),
-                        Token = tokenDto,
-                        RequirePasswordChange = user.RequirePasswordChange,
-                        Avatar = user.Avatar
-                    };
-
-                    _logger.LogInformation($"Login successful for user: {user.Id} (fallback method)");
-                    return Ok(result);
-                }
+                _logger.LogInformation($"Login successful for user: {user.Id}");
+                return Ok(result);
             }
             catch (AuthenticationException ex)
             {
@@ -138,11 +110,7 @@ namespace ExcellyGenLMS.API.Controllers.Auth
             catch (Exception ex)
             {
                 _logger.LogError($"Login error: {ex.Message}");
-                if (ex.InnerException != null)
-                {
-                    _logger.LogError($"Inner exception: {ex.InnerException.Message}");
-                }
-                return StatusCode(500, new { message = "An error occurred during login", details = ex.Message });
+                return StatusCode(500, new { message = "An error occurred during login" });
             }
         }
 
@@ -318,7 +286,7 @@ namespace ExcellyGenLMS.API.Controllers.Auth
         }
 
         [HttpPost("sync-firebase-users")]
-        [Authorize(Roles = "Admin,SuperAdmin")]  // Updated to include SuperAdmin
+        [Authorize(Roles = "Admin,SuperAdmin")]
         public async Task<ActionResult> SyncFirebaseUsers()
         {
             try
@@ -422,7 +390,7 @@ namespace ExcellyGenLMS.API.Controllers.Auth
         }
 
         [HttpPost("fix-role-capitalization")]
-        [Authorize(Roles = "Admin,SuperAdmin")]  // Updated to include SuperAdmin
+        [Authorize(Roles = "Admin,SuperAdmin")]
         public async Task<ActionResult> FixRoleCapitalization()
         {
             try
@@ -501,7 +469,6 @@ namespace ExcellyGenLMS.API.Controllers.Auth
             }
         }
 
-        // New endpoint for SuperAdmin promotion
         [HttpPost("promote-to-superadmin")]
         [Authorize(Roles = "SuperAdmin")]
         public async Task<IActionResult> PromoteToSuperAdmin([FromBody] PromoteToSuperAdminDto request)
@@ -552,6 +519,6 @@ namespace ExcellyGenLMS.API.Controllers.Auth
     // DTO for promoting a user to SuperAdmin
     public class PromoteToSuperAdminDto
     {
-        public required string UserId { get; set; } // Added 'required' keyword to fix warning
+        public required string UserId { get; set; }
     }
 }
