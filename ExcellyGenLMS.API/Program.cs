@@ -42,6 +42,8 @@ using ExcellyGenLMS.Application.Services.Course;
 using ExcellyGenLMS.Application.Services.Learner;
 using ExcellyGenLMS.Application.Services.ProjectManager;
 
+
+
 // API Layer
 using ExcellyGenLMS.API.Middleware;
 using ExcellyGenLMS.API.Controllers; // Import the base Controllers namespace
@@ -50,6 +52,7 @@ using ExcellyGenLMS.API.Controllers.Course;
 using ExcellyGenLMS.API.Controllers.Learner;
 using ExcellyGenLMS.API.Controllers.Auth;
 using ExcellyGenLMS.API.Controllers.ProjectManager;
+
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -298,6 +301,9 @@ static void RegisterRepositories(IServiceCollection services)
     services.AddScoped<IEnrollmentRepository, EnrollmentRepository>();
     services.AddScoped<ILessonProgressRepository, LessonProgressRepository>();
     services.AddScoped<ICertificateRepository, CertificateRepository>();
+    services.AddScoped<IEmployeeAssignmentService, EmployeeAssignmentService>();
+
+
     services.AddScoped<IQuizRepository, QuizRepository>();
     services.AddScoped<IQuizAttemptRepository, QuizAttemptRepository>();
     services.AddScoped<IUserBadgeRepository, UserBadgeRepository>();
@@ -340,6 +346,9 @@ static void RegisterApplicationServices(IServiceCollection services)
     services.AddScoped<IEnrollmentService, EnrollmentService>();
     services.AddScoped<ILearnerCourseService, LearnerCourseService>();
     services.AddScoped<ICertificateService, CertificateService>();
+    services.AddScoped<ICourseCoordinatorAnalyticsService, CourseCoordinatorAnalyticsService>();
+
+
     services.AddScoped<IQuizService, QuizService>();
     services.AddScoped<IQuizAttemptService, QuizAttemptService>();
     services.AddScoped<IUserBadgeService, UserBadgeService>();
@@ -351,6 +360,15 @@ static void RegisterApplicationServices(IServiceCollection services)
     services.AddScoped<ExcellyGenLMS.Application.Interfaces.Learner.ILearnerStatsService, ExcellyGenLMS.Application.Services.Learner.LearnerStatsService>();
     services.AddScoped<ICvService, CvService>();
     services.AddScoped<ILearnerNotificationService, LearnerNotificationService>();
+
+    services.AddScoped<ExcellyGenLMS.Application.Interfaces.ProjectManager.IProjectService,
+        ExcellyGenLMS.Application.Services.ProjectManager.ProjectService>();
+    services.AddScoped<ExcellyGenLMS.Application.Interfaces.ProjectManager.IRoleService,
+        ExcellyGenLMS.Application.Services.ProjectManager.RoleService>();
+    services.AddScoped<ExcellyGenLMS.Application.Interfaces.ProjectManager.IPMTechnologyService,
+        ExcellyGenLMS.Application.Services.ProjectManager.PMTechnologyService>();
+        services.AddScoped<ICourseCoordinatorAnalyticsService, CourseCoordinatorAnalyticsService>();
+
     services.AddScoped<ExcellyGenLMS.Application.Interfaces.ProjectManager.IProjectService, ExcellyGenLMS.Application.Services.ProjectManager.ProjectService>();
     services.AddScoped<ExcellyGenLMS.Application.Interfaces.ProjectManager.IRoleService, ExcellyGenLMS.Application.Services.ProjectManager.RoleService>();
     services.AddScoped<ExcellyGenLMS.Application.Interfaces.ProjectManager.IPMTechnologyService, ExcellyGenLMS.Application.Services.ProjectManager.PMTechnologyService>();
