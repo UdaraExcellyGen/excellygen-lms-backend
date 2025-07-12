@@ -46,6 +46,7 @@ using ExcellyGenLMS.Application.Services.ProjectManager;
 
 // API Layer
 using ExcellyGenLMS.API.Middleware;
+using ExcellyGenLMS.API.Controllers; // Import the base Controllers namespace
 using ExcellyGenLMS.API.Controllers.Admin;
 using ExcellyGenLMS.API.Controllers.Course;
 using ExcellyGenLMS.API.Controllers.Learner;
@@ -97,30 +98,18 @@ static void ConfigureDatabase(WebApplicationBuilder builder)
     var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
         ?? throw new InvalidOperationException("Database connection string 'DefaultConnection' not found.");
 
-    // OPTIMIZATION: Enhanced database configuration for better performance
     builder.Services.AddDbContext<ApplicationDbContext>(options =>
         options.UseSqlServer(connectionString, sqlOptions =>
         {
-            // OPTIMIZATION: Reduce retry attempts for faster failure detection
             sqlOptions.EnableRetryOnFailure(
-                maxRetryCount: 2,  // Reduced from 3
-                maxRetryDelay: TimeSpan.FromSeconds(10), // Reduced from 30
+                maxRetryCount: 2,
+                maxRetryDelay: TimeSpan.FromSeconds(10),
                 errorNumbersToAdd: null);
-
-            // OPTIMIZATION: Add command timeout
-            sqlOptions.CommandTimeout(30); // 30 second timeout
+            sqlOptions.CommandTimeout(30);
         }),
-        // OPTIMIZATION: Ensure proper scoping for connection pooling
         ServiceLifetime.Scoped);
 
-    // OPTIMIZATION: Configure connection for Dapper with proper timeout
-    builder.Services.AddTransient<IDbConnection>(sp =>
-    {
-        var connection = new SqlConnection(connectionString);
-        // Set connection timeout for better performance
-        return connection;
-    });
-
+    builder.Services.AddTransient<IDbConnection>(sp => new SqlConnection(connectionString));
     Console.WriteLine("Database configuration completed with performance optimizations");
 }
 
@@ -131,16 +120,15 @@ static void ConfigureCors(WebApplicationBuilder builder)
         options.AddPolicy("AllowReactApp", policy =>
         {
             policy.WithOrigins(
-                    "http://localhost:5173",              // Vite development
-                    "http://localhost:3000",              // React standard
-                    "https://excelly-lms-f3500.web.app"   // Production
+                    "http://localhost:5173",
+                    "http://localhost:3000",
+                    "https://excelly-lms-f3500.web.app"
                 )
                 .AllowAnyMethod()
                 .AllowAnyHeader()
                 .AllowCredentials();
         });
     });
-
     Console.WriteLine("CORS configuration completed");
 }
 
@@ -169,7 +157,6 @@ static void ConfigureAuthentication(WebApplicationBuilder builder)
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
             ClockSkew = TimeSpan.Zero
         };
-
         options.Events = new JwtBearerEvents
         {
             OnAuthenticationFailed = context =>
@@ -186,7 +173,6 @@ static void ConfigureAuthentication(WebApplicationBuilder builder)
 
     builder.Services.AddAuthorization();
     builder.Services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
-
     Console.WriteLine("Authentication configuration completed");
 }
 
@@ -197,21 +183,17 @@ static void ConfigureFirebase(WebApplicationBuilder builder)
         Console.WriteLine("Firebase already initialized");
         return;
     }
-
     try
     {
         var serviceAccountKeyPath = GetFirebaseServiceAccountPath(builder);
-
         if (File.Exists(serviceAccountKeyPath))
         {
             var projectId = builder.Configuration["Firebase:ProjectId"] ?? "excelly-lms-f3500";
-
             FirebaseApp.Create(new AppOptions
             {
                 Credential = GoogleCredential.FromFile(serviceAccountKeyPath),
                 ProjectId = projectId
             });
-
             Environment.SetEnvironmentVariable("GOOGLE_APPLICATION_CREDENTIALS", serviceAccountKeyPath);
             Console.WriteLine($"Firebase initialized with project: {projectId}");
         }
@@ -223,7 +205,6 @@ static void ConfigureFirebase(WebApplicationBuilder builder)
     catch (Exception ex)
     {
         Console.WriteLine($"Firebase initialization failed: {ex.Message}");
-
         if (builder.Environment.IsDevelopment())
         {
             try
@@ -238,7 +219,7 @@ static void ConfigureFirebase(WebApplicationBuilder builder)
         }
         else
         {
-            throw; // Re-throw in production
+            throw;
         }
     }
 }
@@ -246,13 +227,9 @@ static void ConfigureFirebase(WebApplicationBuilder builder)
 static string GetFirebaseServiceAccountPath(WebApplicationBuilder builder)
 {
     var configPath = builder.Configuration["Firebase:ServiceAccountKeyPath"];
-    if (!string.IsNullOrEmpty(configPath) && File.Exists(configPath))
-        return configPath;
-
+    if (!string.IsNullOrEmpty(configPath) && File.Exists(configPath)) return configPath;
     var baseDirectory = Path.Combine(AppContext.BaseDirectory, "firebase-service-account.json");
-    if (File.Exists(baseDirectory))
-        return baseDirectory;
-
+    if (File.Exists(baseDirectory)) return baseDirectory;
     var contentRoot = Path.Combine(builder.Environment.ContentRootPath, "firebase-service-account.json");
     return contentRoot;
 }
@@ -261,10 +238,12 @@ static void ConfigureControllers(WebApplicationBuilder builder)
 {
     builder.Services.AddHttpContextAccessor();
     builder.Services.AddControllers()
-        .AddApplicationPart(typeof(CourseCategoriesController).Assembly)
-        .AddApplicationPart(typeof(DashboardController).Assembly)
-        .AddApplicationPart(typeof(CoursesController).Assembly)
-        .AddApplicationPart(typeof(LearnerStatsController).Assembly)
+        // Add the main assembly to discover controllers like ImageProxyController
+        .AddApplicationPart(typeof(Program).Assembly)
+        .AddApplicationPart(typeof(ExcellyGenLMS.API.Controllers.Admin.CourseCategoriesController).Assembly)
+        .AddApplicationPart(typeof(ExcellyGenLMS.API.Controllers.Course.CoursesController).Assembly)
+        .AddApplicationPart(typeof(ExcellyGenLMS.API.Controllers.Learner.CvController).Assembly)
+        .AddApplicationPart(typeof(ExcellyGenLMS.API.Controllers.Auth.AuthController).Assembly)
         .AddJsonOptions(options =>
         {
             options.JsonSerializerOptions.Converters.Add(
@@ -272,7 +251,6 @@ static void ConfigureControllers(WebApplicationBuilder builder)
         });
 
     builder.Services.AddEndpointsApiExplorer();
-
     Console.WriteLine("Controllers configuration completed");
 }
 
@@ -285,13 +263,8 @@ static void ConfigureSwagger(WebApplicationBuilder builder)
             Title = "ExcellyGenLMS API",
             Version = "v1.0",
             Description = "Learning Management System API",
-            Contact = new OpenApiContact
-            {
-                Name = "ExcellyGen Team",
-                Email = "support@excellygen.com"
-            }
+            Contact = new OpenApiContact { Name = "ExcellyGen Team", Email = "support@excellygen.com" }
         });
-
         options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
         {
             Description = "JWT Authorization header using the Bearer scheme (Example: 'Bearer 12345abcdef')",
@@ -300,40 +273,28 @@ static void ConfigureSwagger(WebApplicationBuilder builder)
             Type = SecuritySchemeType.ApiKey,
             Scheme = "Bearer"
         });
-
         options.AddSecurityRequirement(new OpenApiSecurityRequirement
         {
             {
                 new OpenApiSecurityScheme
                 {
-                    Reference = new OpenApiReference
-                    {
-                        Type = ReferenceType.SecurityScheme,
-                        Id = "Bearer"
-                    }
+                    Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" }
                 },
                 Array.Empty<string>()
             }
         });
-
         options.CustomSchemaIds(type => type.FullName?.Replace("+", "."));
     });
-
     Console.WriteLine("Swagger configuration completed");
 }
 
 static void RegisterRepositories(IServiceCollection services)
 {
-    // Authentication Repositories
     services.AddScoped<IUserRepository, UserRepository>();
     services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
-
-    // Administration Repositories
     services.AddScoped<ITechnologyRepository, TechnologyRepository>();
     services.AddScoped<ICourseCategoryRepository, CourseCategoryRepository>();
     services.AddScoped<ICourseAdminRepository, CourseAdminRepository>();
-
-    // Course Management Repositories
     services.AddScoped<ICourseRepository, CourseRepository>();
     services.AddScoped<ILessonRepository, LessonRepository>();
     services.AddScoped<ICourseDocumentRepository, CourseDocumentRepository>();
@@ -342,11 +303,9 @@ static void RegisterRepositories(IServiceCollection services)
     services.AddScoped<ICertificateRepository, CertificateRepository>();
     services.AddScoped<IEmployeeAssignmentService, EmployeeAssignmentService>();
 
-    // Assessment Repositories
+
     services.AddScoped<IQuizRepository, QuizRepository>();
     services.AddScoped<IQuizAttemptRepository, QuizAttemptRepository>();
-
-    // Learner Repositories
     services.AddScoped<IUserBadgeRepository, UserBadgeRepository>();
     services.AddScoped<IUserTechnologyRepository, UserTechnologyRepository>();
     services.AddScoped<IUserProjectRepository, UserProjectRepository>();
@@ -354,74 +313,54 @@ static void RegisterRepositories(IServiceCollection services)
     services.AddScoped<IForumThreadRepository, ForumThreadRepository>();
     services.AddScoped<IThreadCommentRepository, ThreadCommentRepository>();
     services.AddScoped<IThreadComReplyRepository, ThreadComReplyRepository>();
-
-    // Learner Notification Repository - ADDED FOR NOTIFICATION SYSTEM
     services.AddScoped<ILearnerNotificationRepository, LearnerNotificationRepository>();
-
-    // Project Management Repositories
     services.AddScoped<IProjectRepository, ProjectRepository>();
     services.AddScoped<IRoleRepository, RoleRepository>();
     services.AddScoped<IPMEmployeeAssignmentRepository, PMEmployeeAssignmentRepository>();
-
     Console.WriteLine("Repository registrations completed");
 }
 
 static void RegisterApplicationServices(IServiceCollection services)
 {
-    // OPTIMIZATION: Add Memory Cache for performance
+    services.AddHttpClient();
     services.AddMemoryCache(options =>
     {
-        options.SizeLimit = 1000; // Limit cache size to prevent memory issues
-        options.CompactionPercentage = 0.25; // Remove 25% of items when limit is reached
+        options.SizeLimit = 1000;
+        options.CompactionPercentage = 0.25;
     });
 
-    // Authentication Services
     services.AddScoped<IUserService, UserService>();
     services.AddScoped<IAuthService, AuthService>();
     services.AddScoped<IFirebaseAuthService, FirebaseAuthService>();
     services.AddScoped<ITokenService, TokenService>();
     services.AddScoped<IEmailService, EmailService>();
-
-    // Administration Services
     services.AddScoped<IUserManagementService, UserManagementService>();
     services.AddScoped<ITechnologyService, TechnologyService>();
     services.AddScoped<ICourseCategoryService, CourseCategoryService>();
-
-    // OPTIMIZATION: Register CourseAdminService with ApplicationDbContext for direct query access
     services.AddScoped<ICourseAdminService, CourseAdminService>();
-
     services.AddScoped<IDashboardService, DashboardService>();
     services.AddScoped<IAnalyticsService, AnalyticsService>();
-
-    // File Storage Services - FIREBASE STORAGE
     services.AddScoped<IFileStorageService, FirebaseStorageService>();
     services.AddScoped<IFileService, FileService>();
-
-    // Course Services
     services.AddScoped<ICourseService, CourseService>();
     services.AddScoped<IEnrollmentService, EnrollmentService>();
     services.AddScoped<ILearnerCourseService, LearnerCourseService>();
     services.AddScoped<ICertificateService, CertificateService>();
     services.AddScoped<ICourseCoordinatorAnalyticsService, CourseCoordinatorAnalyticsService>();
 
-    // Assessment Services
+
     services.AddScoped<IQuizService, QuizService>();
     services.AddScoped<IQuizAttemptService, QuizAttemptService>();
-
-    // Learner Services
     services.AddScoped<IUserBadgeService, UserBadgeService>();
     services.AddScoped<IUserTechnologyService, UserTechnologyService>();
     services.AddScoped<IUserProjectService, UserProjectService>();
     services.AddScoped<IUserCertificationService, UserCertificationService>();
     services.AddScoped<IUserProfileService, UserProfileService>();
     services.AddScoped<IForumService, ForumService>();
-    services.AddScoped<ExcellyGenLMS.Application.Interfaces.Learner.ILearnerStatsService,
-        ExcellyGenLMS.Application.Services.Learner.LearnerStatsService>();
-
-    // Learner Notification Service - ADDED FOR NOTIFICATION SYSTEM
+    services.AddScoped<ExcellyGenLMS.Application.Interfaces.Learner.ILearnerStatsService, ExcellyGenLMS.Application.Services.Learner.LearnerStatsService>();
+    services.AddScoped<ICvService, CvService>();
     services.AddScoped<ILearnerNotificationService, LearnerNotificationService>();
 
-    // Project Management Services
     services.AddScoped<ExcellyGenLMS.Application.Interfaces.ProjectManager.IProjectService,
         ExcellyGenLMS.Application.Services.ProjectManager.ProjectService>();
     services.AddScoped<ExcellyGenLMS.Application.Interfaces.ProjectManager.IRoleService,
@@ -429,14 +368,16 @@ static void RegisterApplicationServices(IServiceCollection services)
     services.AddScoped<ExcellyGenLMS.Application.Interfaces.ProjectManager.IPMTechnologyService,
         ExcellyGenLMS.Application.Services.ProjectManager.PMTechnologyService>();
         services.AddScoped<ICourseCoordinatorAnalyticsService, CourseCoordinatorAnalyticsService>();
-    services.AddScoped<IEmployeeAssignmentService, EmployeeAssignmentService>();
 
+    services.AddScoped<ExcellyGenLMS.Application.Interfaces.ProjectManager.IProjectService, ExcellyGenLMS.Application.Services.ProjectManager.ProjectService>();
+    services.AddScoped<ExcellyGenLMS.Application.Interfaces.ProjectManager.IRoleService, ExcellyGenLMS.Application.Services.ProjectManager.RoleService>();
+    services.AddScoped<ExcellyGenLMS.Application.Interfaces.ProjectManager.IPMTechnologyService, ExcellyGenLMS.Application.Services.ProjectManager.PMTechnologyService>();
+    services.AddScoped<IEmployeeAssignmentService, EmployeeAssignmentService>();
     Console.WriteLine("Application services registration completed with caching optimization");
 }
 
 static void ConfigureMiddlewarePipeline(WebApplication app)
 {
-    // Development Environment Configuration
     if (app.Environment.IsDevelopment())
     {
         app.UseDeveloperExceptionPage();
@@ -456,13 +397,11 @@ static void ConfigureMiddlewarePipeline(WebApplication app)
         Console.WriteLine("Production middleware configured");
     }
 
-    // Core Middleware Pipeline - NO STATIC FILES
     app.UseHttpsRedirection();
     app.UseCors("AllowReactApp");
     app.UseAuthentication();
     app.UseAuthorization();
-    app.UseRoleAuthorization(); // Custom middleware
+    app.UseRoleAuthorization();
     app.MapControllers();
-
     Console.WriteLine("Middleware pipeline configured successfully with optimizations");
 }
