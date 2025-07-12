@@ -1,29 +1,4 @@
-﻿static void ConfigureControllers(WebApplicationBuilder builder)
-{
-    builder.Services.AddControllers()
-        .AddApplicationPart(typeof(ExcellyGenLMS.API.Controllers.Admin.CourseCategoriesController).Assembly)
-        .AddApplicationPart(typeof(ExcellyGenLMS.API.Controllers.Course.CoursesController).Assembly)
-        .AddApplicationPart(typeof(ExcellyGenLMS.API.Controllers.Learner.CvController).Assembly)
-        .AddApplicationPart(typeof(ExcellyGenLMS.API.Controllers.Auth.AuthController).Assembly)
-        // ...
-}```
-
-Your application is configured to **only** look for controllers in the specific assemblies you have listed with `.AddApplicationPart()`. Because our new `ImageProxyController` is not in any of those specific parts, the framework is ignoring it.
-
-### The Solution: Add the New Controller's Assembly
-
-To fix this, we simply need to tell the application to also scan the assembly that contains our new `ImageProxyController`.
-
-Here is the complete, final version of your `Program.cs` file. I have added the necessary line to the `ConfigureControllers` method.
-
-**Simply replace the entire content of your `Program.cs` file with this code, save it, and restart your backend server.**
-
----
-
-### Full Modified `Program.cs` Code
-
-```csharp
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
@@ -75,7 +50,6 @@ using ExcellyGenLMS.API.Controllers.Course;
 using ExcellyGenLMS.API.Controllers.Learner;
 using ExcellyGenLMS.API.Controllers.Auth;
 using ExcellyGenLMS.API.Controllers.ProjectManager;
-
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -261,10 +235,8 @@ static void ConfigureControllers(WebApplicationBuilder builder)
 {
     builder.Services.AddHttpContextAccessor();
     builder.Services.AddControllers()
-        // =================================================================
-        // THE FIX IS HERE: Add the main assembly to discover the ImageProxyController
-        .AddApplicationPart(typeof(ImageProxyController).Assembly)
-        // =================================================================
+        // Add the main assembly to discover controllers like ImageProxyController
+        .AddApplicationPart(typeof(Program).Assembly)
         .AddApplicationPart(typeof(ExcellyGenLMS.API.Controllers.Admin.CourseCategoriesController).Assembly)
         .AddApplicationPart(typeof(ExcellyGenLMS.API.Controllers.Course.CoursesController).Assembly)
         .AddApplicationPart(typeof(ExcellyGenLMS.API.Controllers.Learner.CvController).Assembly)
