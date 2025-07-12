@@ -42,6 +42,8 @@ using ExcellyGenLMS.Application.Services.Course;
 using ExcellyGenLMS.Application.Services.Learner;
 using ExcellyGenLMS.Application.Services.ProjectManager;
 
+
+
 // API Layer
 using ExcellyGenLMS.API.Middleware;
 using ExcellyGenLMS.API.Controllers.Admin;
@@ -49,6 +51,7 @@ using ExcellyGenLMS.API.Controllers.Course;
 using ExcellyGenLMS.API.Controllers.Learner;
 using ExcellyGenLMS.API.Controllers.Auth;
 using ExcellyGenLMS.API.Controllers.ProjectManager;
+
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -337,6 +340,7 @@ static void RegisterRepositories(IServiceCollection services)
     services.AddScoped<IEnrollmentRepository, EnrollmentRepository>();
     services.AddScoped<ILessonProgressRepository, LessonProgressRepository>();
     services.AddScoped<ICertificateRepository, CertificateRepository>();
+    services.AddScoped<IEmployeeAssignmentService, EmployeeAssignmentService>();
 
     // Assessment Repositories
     services.AddScoped<IQuizRepository, QuizRepository>();
@@ -398,6 +402,7 @@ static void RegisterApplicationServices(IServiceCollection services)
     services.AddScoped<IEnrollmentService, EnrollmentService>();
     services.AddScoped<ILearnerCourseService, LearnerCourseService>();
     services.AddScoped<ICertificateService, CertificateService>();
+    services.AddScoped<ICourseCoordinatorAnalyticsService, CourseCoordinatorAnalyticsService>();
 
     // Assessment Services
     services.AddScoped<IQuizService, QuizService>();
@@ -423,6 +428,7 @@ static void RegisterApplicationServices(IServiceCollection services)
         ExcellyGenLMS.Application.Services.ProjectManager.RoleService>();
     services.AddScoped<ExcellyGenLMS.Application.Interfaces.ProjectManager.IPMTechnologyService,
         ExcellyGenLMS.Application.Services.ProjectManager.PMTechnologyService>();
+        services.AddScoped<ICourseCoordinatorAnalyticsService, CourseCoordinatorAnalyticsService>();
     services.AddScoped<IEmployeeAssignmentService, EmployeeAssignmentService>();
 
     Console.WriteLine("Application services registration completed with caching optimization");
