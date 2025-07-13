@@ -1,4 +1,5 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿// ExcellyGenLMS.API/Program.cs - Updated with External Certificate Services
+using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
@@ -338,6 +339,9 @@ static void RegisterRepositories(IServiceCollection services)
     services.AddScoped<ILessonProgressRepository, LessonProgressRepository>();
     services.AddScoped<ICertificateRepository, CertificateRepository>();
 
+    // ===== EXTERNAL CERTIFICATE REPOSITORY - ADDED =====
+    services.AddScoped<IExternalCertificateRepository, ExternalCertificateRepository>();
+
     // Assessment Repositories
     services.AddScoped<IQuizRepository, QuizRepository>();
     services.AddScoped<IQuizAttemptRepository, QuizAttemptRepository>();
@@ -359,7 +363,7 @@ static void RegisterRepositories(IServiceCollection services)
     services.AddScoped<IRoleRepository, RoleRepository>();
     services.AddScoped<IPMEmployeeAssignmentRepository, PMEmployeeAssignmentRepository>();
 
-    Console.WriteLine("Repository registrations completed");
+    Console.WriteLine("Repository registrations completed with External Certificate support");
 }
 
 static void RegisterApplicationServices(IServiceCollection services)
@@ -399,6 +403,9 @@ static void RegisterApplicationServices(IServiceCollection services)
     services.AddScoped<ILearnerCourseService, LearnerCourseService>();
     services.AddScoped<ICertificateService, CertificateService>();
 
+    // ===== EXTERNAL CERTIFICATE SERVICE - ADDED =====
+    services.AddScoped<IExternalCertificateService, ExternalCertificateService>();
+
     // Assessment Services
     services.AddScoped<IQuizService, QuizService>();
     services.AddScoped<IQuizAttemptService, QuizAttemptService>();
@@ -425,7 +432,7 @@ static void RegisterApplicationServices(IServiceCollection services)
         ExcellyGenLMS.Application.Services.ProjectManager.PMTechnologyService>();
     services.AddScoped<IEmployeeAssignmentService, EmployeeAssignmentService>();
 
-    Console.WriteLine("Application services registration completed with caching optimization");
+    Console.WriteLine("Application services registration completed with External Certificate support and caching optimization");
 }
 
 static void ConfigureMiddlewarePipeline(WebApplication app)
