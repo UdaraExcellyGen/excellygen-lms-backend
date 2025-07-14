@@ -31,7 +31,78 @@ namespace ExcellyGenLMS.API.Controllers.ProjectManager
         // ----- Employee Endpoints -----
 
         [HttpGet("employees")]
-        public async Task<ActionResult<IEnumerable<EmployeeDto>>> GetAvailableEmployees(
+        public async Task<ActionResult<object>> GetAvailableEmployees(
+            [FromQuery] string? searchTerm = null,
+            [FromQuery] string? department = null,
+            [FromQuery] bool? availableOnly = null,
+            [FromQuery] int? minAvailableWorkload = null,
+            [FromQuery] List<string>? skills = null,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 50)
+        {
+            try
+            {
+                // Validate pagination parameters
+                if (page < 1) page = 1;
+                if (pageSize < 1) pageSize = 50;
+                if (pageSize > 200) pageSize = 200; // Limit maximum page size
+
+                var filter = new EmployeeFilterDto
+                {
+                    SearchTerm = searchTerm,
+                    Department = department,
+                    AvailableOnly = availableOnly,
+                    MinAvailableWorkload = minAvailableWorkload,
+                    RequiredSkills = skills
+                };
+
+                _logger.LogInformation($"Getting employees - Page: {page}, PageSize: {pageSize}, SearchTerm: {searchTerm}");
+
+                var allEmployees = await _employeeAssignmentService.GetAvailableEmployeesAsync(filter);
+                var employeesList = allEmployees.ToList();
+
+                // Calculate pagination
+                var totalCount = employeesList.Count;
+                var totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
+                var skip = (page - 1) * pageSize;
+                var paginatedEmployees = employeesList.Skip(skip).Take(pageSize).ToList();
+
+                // Return paginated response with metadata
+                var response = new
+                {
+                    data = paginatedEmployees,
+                    pagination = new
+                    {
+                        currentPage = page,
+                        pageSize = pageSize,
+                        totalCount = totalCount,
+                        totalPages = totalPages,
+                        hasNextPage = page < totalPages,
+                        hasPreviousPage = page > 1
+                    },
+                    filters = new
+                    {
+                        searchTerm = searchTerm,
+                        department = department,
+                        availableOnly = availableOnly,
+                        minAvailableWorkload = minAvailableWorkload,
+                        skills = skills
+                    }
+                };
+
+                _logger.LogInformation($"Returning {paginatedEmployees.Count} of {totalCount} employees (Page {page}/{totalPages})");
+                return Ok(response);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error fetching available employees");
+                return StatusCode(500, new { message = "An error occurred while fetching employees", error = ex.Message });
+            }
+        }
+
+        // Legacy endpoint without pagination for backward compatibility
+        [HttpGet("employees/all")]
+        public async Task<ActionResult<IEnumerable<EmployeeDto>>> GetAllAvailableEmployees(
             [FromQuery] string? searchTerm = null,
             [FromQuery] string? department = null,
             [FromQuery] bool? availableOnly = null,
@@ -54,7 +125,7 @@ namespace ExcellyGenLMS.API.Controllers.ProjectManager
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error fetching available employees");
+                _logger.LogError(ex, "Error fetching all available employees");
                 return StatusCode(500, new { message = "An error occurred while fetching employees", error = ex.Message });
             }
         }
@@ -98,7 +169,10 @@ namespace ExcellyGenLMS.API.Controllers.ProjectManager
         }
 
         [HttpGet("employees/by-skills")]
-        public async Task<ActionResult<IEnumerable<EmployeeDto>>> GetEmployeesBySkills([FromQuery] List<string> skills)
+        public async Task<ActionResult<object>> GetEmployeesBySkills(
+            [FromQuery] List<string> skills,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 50)
         {
             try
             {
@@ -107,8 +181,39 @@ namespace ExcellyGenLMS.API.Controllers.ProjectManager
                     return BadRequest(new { message = "At least one skill must be specified" });
                 }
 
-                var employees = await _employeeAssignmentService.GetEmployeesWithMatchingSkillsAsync(skills);
-                return Ok(employees);
+                // Validate pagination parameters
+                if (page < 1) page = 1;
+                if (pageSize < 1) pageSize = 50;
+                if (pageSize > 200) pageSize = 200;
+
+                var allEmployees = await _employeeAssignmentService.GetEmployeesWithMatchingSkillsAsync(skills);
+                var employeesList = allEmployees.ToList();
+
+                // Calculate pagination
+                var totalCount = employeesList.Count;
+                var totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
+                var skip = (page - 1) * pageSize;
+                var paginatedEmployees = employeesList.Skip(skip).Take(pageSize).ToList();
+
+                var response = new
+                {
+                    data = paginatedEmployees,
+                    pagination = new
+                    {
+                        currentPage = page,
+                        pageSize = pageSize,
+                        totalCount = totalCount,
+                        totalPages = totalPages,
+                        hasNextPage = page < totalPages,
+                        hasPreviousPage = page > 1
+                    },
+                    searchCriteria = new
+                    {
+                        skills = skills
+                    }
+                };
+
+                return Ok(response);
             }
             catch (Exception ex)
             {
@@ -161,6 +266,20 @@ namespace ExcellyGenLMS.API.Controllers.ProjectManager
                 if (!request.Assignments.Any())
                 {
                     return BadRequest(new { message = "At least one assignment is required" });
+                }
+
+                // Validate each assignment request
+                foreach (var assignment in request.Assignments)
+                {
+                    if (string.IsNullOrEmpty(assignment.EmployeeId) || string.IsNullOrEmpty(assignment.Role))
+                    {
+                        return BadRequest(new { message = "Each assignment must have EmployeeId and Role" });
+                    }
+
+                    if (assignment.WorkloadPercentage <= 0 || assignment.WorkloadPercentage > 100)
+                    {
+                        return BadRequest(new { message = "WorkloadPercentage must be between 1 and 100 for each assignment" });
+                    }
                 }
 
                 var assignments = await _employeeAssignmentService.AssignMultipleEmployeesToProjectAsync(request);
@@ -296,6 +415,20 @@ namespace ExcellyGenLMS.API.Controllers.ProjectManager
                 _logger.LogError(ex, "Error validating assignment");
                 return StatusCode(500, new { message = "An error occurred while validating assignment", error = ex.Message });
             }
+        }
+
+        // ----- Health Check Endpoint -----
+
+        [HttpGet("health")]
+        public ActionResult GetHealth()
+        {
+            return Ok(new 
+            { 
+                status = "healthy", 
+                timestamp = DateTime.UtcNow,
+                service = "EmployeeAssignmentService",
+                version = "2.0-optimized"
+            });
         }
     }
 }
