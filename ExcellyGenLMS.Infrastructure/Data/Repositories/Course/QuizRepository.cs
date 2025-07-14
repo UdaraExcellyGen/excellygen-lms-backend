@@ -5,7 +5,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using ExcellyGenLMS.Infrastructure.Data;
 
 namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
 {
@@ -56,9 +55,9 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
                                  .ToListAsync();
         }
 
+        // ADD THIS METHOD IMPLEMENTATION
         public async Task<IEnumerable<Quiz>> GetQuizzesByCourseIdAsync(int courseId)
         {
-            // FIX: Added a null check for q.Lesson before accessing its properties
             return await _context.Quizzes
                 .Where(q => q.Lesson != null && q.Lesson.CourseId == courseId)
                 .Include(q => q.Lesson)
@@ -279,22 +278,7 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
                 if (questions.Count == 0)
                 {
                     Console.WriteLine($"❌ No questions found in QuizBank {quiz.QuizBankId} for Quiz {quizId}");
-                    Console.WriteLine("🔍 Debug: Let's check all quiz banks and questions in the database...");
-
-                    var allQuizBanks = await _context.QuizBanks.ToListAsync();
-                    Console.WriteLine($"📋 Total QuizBanks in database: {allQuizBanks.Count}");
-                    foreach (var qb in allQuizBanks)
-                    {
-                        var questionCount = await _context.QuizBankQuestions.CountAsync(q => q.QuizBankId == qb.QuizBankId);
-                        Console.WriteLine($"   QuizBank ID {qb.QuizBankId}: {questionCount} questions");
-                    }
-
                     return new List<QuizBankQuestion>();
-                }
-
-                foreach (var q in questions)
-                {
-                    Console.WriteLine($"   Question {q.QuizBankQuestionId}: '{q.QuestionContent}' ({q.MCQQuestionOptions.Count} options)");
                 }
 
                 var selectedQuestions = questions

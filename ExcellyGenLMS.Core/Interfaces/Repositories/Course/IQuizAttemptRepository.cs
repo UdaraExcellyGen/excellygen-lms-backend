@@ -1,4 +1,3 @@
-// ExcellyGenLMS.Core/Interfaces/Repositories/Course/IQuizAttemptRepository.cs
 using ExcellyGenLMS.Core.Entities.Course;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -16,6 +15,7 @@ namespace ExcellyGenLMS.Core.Interfaces.Repositories.Course
         Task UpdateQuizAttemptAsync(QuizAttempt attempt);
         Task DeleteQuizAttemptAsync(int attemptId);
         Task<IEnumerable<QuizAttempt>> GetCompletedAttemptsByUserAndQuizAsync(string userId, int quizId);
+        Task<IEnumerable<QuizAttempt>> GetCompletedAttemptsByUserAndQuizzesAsync(string userId, List<int> quizIds); // ADD THIS LINE
 
         // Quiz Attempt Answer operations
         Task<QuizAttemptAnswer?> GetAnswerByAttemptAndQuestionAsync(int attemptId, int questionId);

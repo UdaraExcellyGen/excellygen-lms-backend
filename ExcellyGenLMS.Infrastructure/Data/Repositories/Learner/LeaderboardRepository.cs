@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using ExcellyGenLMS.Core.Interfaces.Repositories.Learner;
 using Microsoft.EntityFrameworkCore;
+using System;
 
 namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Learner
 {
@@ -10,6 +11,8 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Learner
     {
         private readonly ApplicationDbContext _context;
         private const int CourseCompletionPoints = 100;
+        // THIS IS THE FINAL FIX: We standardize the maximum points for any quiz.
+        private const int QuizMaxPoints = 100;
 
         public LeaderboardRepository(ApplicationDbContext context)
         {
@@ -18,17 +21,38 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Learner
 
         public async Task<IEnumerable<UserPoints>> GetUserPointsAsync()
         {
+            // Part 1: Course completion points (This logic is correct)
             var coursePoints = _context.Enrollments
                 .Where(e => e.Status == "completed")
                 .GroupBy(e => e.UserId)
                 .Select(g => new { UserId = g.Key, Points = g.Count() * CourseCompletionPoints });
 
+            // Part 2: Quiz points calculation (DEFINITIVELY CORRECTED)
             var quizPoints = _context.QuizAttempts
-                .Where(qa => qa.IsCompleted && qa.Score.HasValue)
-                .GroupBy(qa => qa.UserId)
-                // FIX: Using ?? 0 to safely handle nullable Score, resolving the warning.
-                .Select(g => new { UserId = g.Key, Points = g.Sum(qa => qa.Score ?? 0) });
+                // Find all completed attempts that have questions
+                .Where(qa => qa.IsCompleted && qa.TotalQuestions > 0)
+                .Select(attempt => new
+                {
+                    attempt.UserId,
+                    // Calculate points based on a standard 100-point scale,
+                    // completely ignoring the incorrect TotalMarks value from the database.
+                    Points = (int)Math.Round(
+                        // Calculate the percentage score (e.g., 0.5 for 1 out of 2)
+                        ((double)attempt.CorrectAnswers / attempt.TotalQuestions)
+                        // Multiply by our standard max points.
+                        * QuizMaxPoints
+                    )
+                })
+                // Group the calculated points by user
+                .GroupBy(q => q.UserId)
+                // Sum up all the quiz points for each user
+                .Select(g => new
+                {
+                    UserId = g.Key,
+                    Points = g.Sum(q => q.Points)
+                });
 
+            // Part 3: Combine course points and quiz points (This logic is correct)
             var allPoints = await coursePoints
                 .Concat(quizPoints)
                 .ToListAsync();
