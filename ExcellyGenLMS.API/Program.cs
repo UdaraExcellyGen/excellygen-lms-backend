@@ -36,29 +36,32 @@ using ExcellyGenLMS.Application.Services.Course;
 using ExcellyGenLMS.Application.Services.Learner;
 using ExcellyGenLMS.Application.Services.ProjectManager;
 using ExcellyGenLMS.API.Middleware;
-using ExcellyGenLMS.API.Controllers;
-using ExcellyGenLMS.API.Controllers.Admin;
-using ExcellyGenLMS.API.Controllers.Course;
-using ExcellyGenLMS.API.Controllers.Learner;
-using ExcellyGenLMS.API.Controllers.Auth;
-using ExcellyGenLMS.API.Controllers.ProjectManager;
 
 var builder = WebApplication.CreateBuilder(args);
 
 try
 {
+    // ===== CORE SERVICES CONFIGURATION =====
     ConfigureDatabase(builder);
     ConfigureCors(builder);
     ConfigureAuthentication(builder);
     ConfigureFirebase(builder);
+
+    // ===== DEPENDENCY INJECTION =====
     RegisterRepositories(builder.Services);
     RegisterApplicationServices(builder.Services);
+
+    // ===== WEB API CONFIGURATION =====
     ConfigureControllers(builder);
     ConfigureSwagger(builder);
 
+    // ===== BUILD APPLICATION =====
     var app = builder.Build();
+
+    // ===== CONFIGURE MIDDLEWARE PIPELINE =====
     ConfigureMiddlewarePipeline(app);
 
+    // ===== START APPLICATION =====
     Console.WriteLine("ExcellyGenLMS API is starting...");
     Console.WriteLine($"Environment: {app.Environment.EnvironmentName}");
     Console.WriteLine($"URLs: {string.Join(", ", app.Urls)}");
@@ -281,7 +284,6 @@ static void RegisterRepositories(IServiceCollection services)
     services.AddScoped<IExternalCertificateRepository, ExternalCertificateRepository>();
     services.AddScoped<IQuizRepository, QuizRepository>();
     services.AddScoped<IQuizAttemptRepository, QuizAttemptRepository>();
-    services.AddScoped<IUserBadgeRepository, UserBadgeRepository>();
     services.AddScoped<IUserTechnologyRepository, UserTechnologyRepository>();
     services.AddScoped<IUserProjectRepository, UserProjectRepository>();
     services.AddScoped<IUserCertificationRepository, UserCertificationRepository>();
@@ -292,11 +294,12 @@ static void RegisterRepositories(IServiceCollection services)
     services.AddScoped<IProjectRepository, ProjectRepository>();
     services.AddScoped<IRoleRepository, RoleRepository>();
     services.AddScoped<IPMEmployeeAssignmentRepository, PMEmployeeAssignmentRepository>();
-
-    // NEW REPOSITORY REGISTRATION
     services.AddScoped<ILeaderboardRepository, LeaderboardRepository>();
 
-    Console.WriteLine("Repository registrations completed with External Certificate support");
+    // == NEW BADGE REPOSITORY ==
+    services.AddScoped<IBadgeRepository, BadgeRepository>();
+
+    Console.WriteLine("Repository registrations completed.");
 }
 
 static void RegisterApplicationServices(IServiceCollection services)
@@ -335,16 +338,19 @@ static void RegisterApplicationServices(IServiceCollection services)
     services.AddScoped<IUserCertificationService, UserCertificationService>();
     services.AddScoped<IUserProfileService, UserProfileService>();
     services.AddScoped<IForumService, ForumService>();
-    services.AddScoped<ExcellyGenLMS.Application.Interfaces.Learner.ILearnerStatsService, ExcellyGenLMS.Application.Services.Learner.LearnerStatsService>();
+    services.AddScoped<ILearnerStatsService, LearnerStatsService>();
     services.AddScoped<ICvService, CvService>();
     services.AddScoped<ILearnerNotificationService, LearnerNotificationService>();
     services.AddScoped<ILeaderboardService, LeaderboardService>();
+    services.AddScoped<IEmployeeAssignmentService, EmployeeAssignmentService>();
     services.AddScoped<ExcellyGenLMS.Application.Interfaces.ProjectManager.IProjectService, ExcellyGenLMS.Application.Services.ProjectManager.ProjectService>();
     services.AddScoped<ExcellyGenLMS.Application.Interfaces.ProjectManager.IRoleService, ExcellyGenLMS.Application.Services.ProjectManager.RoleService>();
     services.AddScoped<ExcellyGenLMS.Application.Interfaces.ProjectManager.IPMTechnologyService, ExcellyGenLMS.Application.Services.ProjectManager.PMTechnologyService>();
-    services.AddScoped<IEmployeeAssignmentService, EmployeeAssignmentService>();
 
-    Console.WriteLine("Application services registration completed with caching optimization");
+    // == NEW BADGE SERVICE ==
+    services.AddScoped<IBadgesAndRewardsService, BadgesAndRewardsService>();
+
+    Console.WriteLine("Application services registration completed.");
 }
 
 static void ConfigureMiddlewarePipeline(WebApplication app)
@@ -359,13 +365,11 @@ static void ConfigureMiddlewarePipeline(WebApplication app)
             options.RoutePrefix = "swagger";
             options.DocumentTitle = "ExcellyGenLMS API Documentation";
         });
-        Console.WriteLine("Development middleware configured");
     }
     else
     {
         app.UseExceptionHandler("/error");
         app.UseHsts();
-        Console.WriteLine("Production middleware configured");
     }
 
     app.UseHttpsRedirection();
@@ -374,5 +378,6 @@ static void ConfigureMiddlewarePipeline(WebApplication app)
     app.UseAuthorization();
     app.UseRoleAuthorization();
     app.MapControllers();
-    Console.WriteLine("Middleware pipeline configured successfully with optimizations");
+
+    Console.WriteLine("Middleware pipeline configured successfully.");
 }

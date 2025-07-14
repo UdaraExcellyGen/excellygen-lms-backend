@@ -11,19 +11,22 @@ namespace ExcellyGenLMS.Core.Entities.Learner
         public int Id { get; set; }
 
         [Required]
-        public string UserId { get; set; } = string.Empty;
-
-        [ForeignKey("UserId")]
-        public virtual User User { get; set; } = null!;
+        public required string UserId { get; set; }
 
         [Required]
-        public string BadgeId { get; set; } = string.Empty;
+        public required string BadgeId { get; set; }
+
+        // FIX: This property is required by the business logic.
+        public bool IsClaimed { get; set; }
+
+        // FIX: This property is required by the business logic and must be nullable.
+        public DateTime? DateEarned { get; set; }
+
+        // --- Navigation Properties ---
+        [ForeignKey("UserId")]
+        public User? User { get; set; }
 
         [ForeignKey("BadgeId")]
-        public virtual Badge Badge { get; set; } = null!;
-
-        public DateTime EarnedDate { get; set; } = DateTime.UtcNow;
-
-        public bool IsRead { get; set; } = false;
+        public Badge? Badge { get; set; }
     }
 }

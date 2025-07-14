@@ -1,23 +1,18 @@
-using System;
-using System.Collections.Generic;
-
 namespace ExcellyGenLMS.Application.DTOs.Learner
 {
     public class BadgeDto
     {
-        public string Id { get; set; } = string.Empty;
-        public string Name { get; set; } = string.Empty;
-        public string Description { get; set; } = string.Empty;
-        public string Icon { get; set; } = string.Empty;
-        public string Color { get; set; } = string.Empty;
-        public string ImageUrl { get; set; } = string.Empty;
-        public DateTime? EarnedDate { get; set; }
-    }
-
-    public class UserBadgeSummaryDto
-    {
-        public int TotalBadges { get; set; }
-        public int ThisMonth { get; set; }
-        public List<BadgeDto> RecentBadges { get; set; } = new List<BadgeDto>();
+        public required string Id { get; set; }
+        public required string Title { get; set; }
+        public required string Description { get; set; }
+        public required string HowToEarn { get; set; }
+        public required string IconPath { get; set; }
+        public int CurrentProgress { get; set; }
+        public int TargetProgress { get; set; }
+        public bool IsUnlocked { get; set; }
+        public bool IsClaimed { get; set; }
+        public string? DateEarned { get; set; }
+        public required string Category { get; set; }
+        public required string Color { get; set; }
     }
 }
