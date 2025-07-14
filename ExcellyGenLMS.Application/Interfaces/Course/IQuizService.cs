@@ -1,4 +1,3 @@
-// ExcellyGenLMS.Application/Interfaces/Course/IQuizService.cs
 using ExcellyGenLMS.Application.DTOs.Course;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -31,5 +30,6 @@ namespace ExcellyGenLMS.Application.Interfaces.Course
 
         // Course-level quiz methods
         Task<IEnumerable<QuizDto>> GetQuizzesByCourseIdAsync(int courseId);
+        Task<IEnumerable<QuizDto>> GetQuizzesByCourseIdsAsync(List<int> courseIds); // ADD THIS LINE
     }
 }

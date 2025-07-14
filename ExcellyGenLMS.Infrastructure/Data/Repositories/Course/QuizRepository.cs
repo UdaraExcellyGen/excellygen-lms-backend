@@ -1,12 +1,10 @@
-﻿// ExcellyGenLMS.Infrastructure/Data/Repositories/Course/QuizRepository.cs
-using ExcellyGenLMS.Core.Entities.Course;
+﻿using ExcellyGenLMS.Core.Entities.Course;
 using ExcellyGenLMS.Core.Interfaces.Repositories.Course;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using ExcellyGenLMS.Infrastructure.Data;
 
 namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
 {
@@ -31,7 +29,6 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
                     throw new ArgumentException($"QuizBank with ID {quizBank.QuizBankId} not found.");
                 }
 
-                // Update properties as needed
                 existingQuizBank.QuizBankSize = quizBank.QuizBankSize;
 
                 await _context.SaveChangesAsync();
@@ -58,10 +55,11 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
                                  .ToListAsync();
         }
 
+        // ADD THIS METHOD IMPLEMENTATION
         public async Task<IEnumerable<Quiz>> GetQuizzesByCourseIdAsync(int courseId)
         {
             return await _context.Quizzes
-                .Where(q => q.Lesson.CourseId == courseId)
+                .Where(q => q.Lesson != null && q.Lesson.CourseId == courseId)
                 .Include(q => q.Lesson)
                 .AsNoTracking()
                 .ToListAsync();
@@ -209,14 +207,12 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
             await _context.SaveChangesAsync();
         }
 
-        // Check if an option is used in any quiz attempts
         public async Task<bool> IsOptionUsedInAttemptsAsync(int optionId)
         {
             return await _context.QuizAttemptAnswers
                                 .AnyAsync(qaa => qaa.SelectedOptionId == optionId);
         }
 
-        // Modified to match the interface return type (Task instead of Task<bool>)
         public async Task DeleteOptionAsync(int optionId)
         {
             try
@@ -224,17 +220,12 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
                 var option = await _context.MCQQuestionOptions.FindAsync(optionId);
                 if (option != null)
                 {
-                    // Check if the option is used in any quiz attempts
                     bool isUsed = await IsOptionUsedInAttemptsAsync(optionId);
-
                     if (!isUsed)
                     {
-                        // Safe to delete
                         _context.MCQQuestionOptions.Remove(option);
                         await _context.SaveChangesAsync();
                     }
-                    // If it's in use, just silently don't delete it
-                    // This prevents the foreign key constraint error
                 }
                 else
                 {
@@ -243,20 +234,16 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
             }
             catch (DbUpdateException ex) when (ex.InnerException?.Message.Contains("REFERENCE constraint") == true)
             {
-                // Catch and handle constraint violation gracefully - this is a fallback
-                // We shouldn't reach here if IsOptionUsedInAttemptsAsync works correctly
                 Console.WriteLine($"Cannot delete option {optionId} because it's referenced in quiz attempts");
             }
         }
 
-        // FIXED: This is the critical method that was causing "No questions found"
         public async Task<IEnumerable<QuizBankQuestion>> GetRandomQuestionsForQuizAsync(int quizId, int count)
         {
             try
             {
                 Console.WriteLine($"=== GetRandomQuestionsForQuizAsync called for Quiz ID: {quizId}, Count: {count} ===");
 
-                // Step 1: Get the quiz first
                 var quiz = await _context.Quizzes
                                          .AsNoTracking()
                                          .FirstOrDefaultAsync(q => q.QuizId == quizId);
@@ -269,7 +256,6 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
 
                 Console.WriteLine($"✅ Found Quiz: ID={quiz.QuizId}, Title='{quiz.QuizTitle}', QuizBankId={quiz.QuizBankId}");
 
-                // Step 2: Get the quiz bank
                 var quizBank = await _context.QuizBanks
                                             .AsNoTracking()
                                             .FirstOrDefaultAsync(qb => qb.QuizBankId == quiz.QuizBankId);
@@ -282,7 +268,6 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
 
                 Console.WriteLine($"✅ Found QuizBank: ID={quizBank.QuizBankId}, Size={quizBank.QuizBankSize}");
 
-                // Step 3: Get questions for this quiz bank
                 var questions = await _context.QuizBankQuestions
                                               .Where(qbq => qbq.QuizBankId == quiz.QuizBankId)
                                               .Include(qbq => qbq.MCQQuestionOptions)
@@ -293,25 +278,9 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
                 if (questions.Count == 0)
                 {
                     Console.WriteLine($"❌ No questions found in QuizBank {quiz.QuizBankId} for Quiz {quizId}");
-                    Console.WriteLine("🔍 Debug: Let's check all quiz banks and questions in the database...");
-
-                    var allQuizBanks = await _context.QuizBanks.ToListAsync();
-                    Console.WriteLine($"📋 Total QuizBanks in database: {allQuizBanks.Count}");
-                    foreach (var qb in allQuizBanks)
-                    {
-                        var questionCount = await _context.QuizBankQuestions.CountAsync(q => q.QuizBankId == qb.QuizBankId);
-                        Console.WriteLine($"   QuizBank ID {qb.QuizBankId}: {questionCount} questions");
-                    }
-
                     return new List<QuizBankQuestion>();
                 }
 
-                foreach (var q in questions)
-                {
-                    Console.WriteLine($"   Question {q.QuizBankQuestionId}: '{q.QuestionContent}' ({q.MCQQuestionOptions.Count} options)");
-                }
-
-                // Step 4: Select random questions
                 var selectedQuestions = questions
                                        .OrderBy(q => Guid.NewGuid())
                                        .Take(count)

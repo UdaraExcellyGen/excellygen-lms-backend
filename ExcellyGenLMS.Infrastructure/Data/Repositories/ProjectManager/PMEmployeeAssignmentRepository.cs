@@ -58,7 +58,7 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.ProjectManager
         {
             _context.PMEmployeeAssignments.Add(assignment);
             await _context.SaveChangesAsync();
-            
+
             // Return the assignment with included relationships
             return await GetByIdAsync(assignment.Id) ?? assignment;
         }
@@ -67,7 +67,7 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.ProjectManager
         {
             _context.PMEmployeeAssignments.AddRange(assignments);
             await _context.SaveChangesAsync();
-            
+
             // Return assignments with included relationships
             var assignmentIds = assignments.Select(a => a.Id).ToList();
             return await _context.PMEmployeeAssignments
@@ -130,8 +130,8 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.ProjectManager
         public async Task<bool> HasDuplicateAssignmentAsync(string projectId, string employeeId, string role)
         {
             return await _context.PMEmployeeAssignments
-                .AnyAsync(a => a.ProjectId == projectId && 
-                              a.EmployeeId == employeeId && 
+                .AnyAsync(a => a.ProjectId == projectId &&
+                              a.EmployeeId == employeeId &&
                               a.Role == role);
         }
 
@@ -140,7 +140,7 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.ProjectManager
             return await _context.PMEmployeeAssignments
                 .Include(a => a.Project)
                 .Include(a => a.Employee)
-                .Where(a => a.EmployeeId == employeeId && a.Project.Status == "Active")
+                .Where(a => a.EmployeeId == employeeId && a.Project!.Status == "Active")
                 .ToListAsync();
         }
 
@@ -157,7 +157,7 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.ProjectManager
         /// </summary>
         public async Task<Dictionary<string, int>> GetEmployeesCurrentWorkloadAsync(List<string> employeeIds)
         {
-            if (!employeeIds?.Any() == true)
+            if (employeeIds == null || !employeeIds.Any())
             {
                 return new Dictionary<string, int>();
             }
@@ -180,7 +180,7 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.ProjectManager
         /// </summary>
         public async Task<Dictionary<string, List<PMEmployeeAssignment>>> GetEmployeesAssignmentsWithProjectsAsync(List<string> employeeIds)
         {
-            if (!employeeIds?.Any() == true)
+            if (employeeIds == null || !employeeIds.Any())
             {
                 return new Dictionary<string, List<PMEmployeeAssignment>>();
             }
@@ -188,7 +188,7 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.ProjectManager
             var assignments = await _context.PMEmployeeAssignments
                 .Include(a => a.Project)
                 .Include(a => a.Employee)
-                .Where(a => employeeIds.Contains(a.EmployeeId) && a.Project.Status == "Active")
+                .Where(a => employeeIds.Contains(a.EmployeeId) && a.Project!.Status == "Active")
                 .ToListAsync();
 
             return employeeIds.ToDictionary(
@@ -202,15 +202,15 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.ProjectManager
         /// </summary>
         public async Task<Dictionary<string, List<string>>> GetEmployeesActiveProjectNamesAsync(List<string> employeeIds)
         {
-            if (!employeeIds?.Any() == true)
+            if (employeeIds == null || !employeeIds.Any())
             {
                 return new Dictionary<string, List<string>>();
             }
 
             var projectAssignments = await _context.PMEmployeeAssignments
                 .Include(a => a.Project)
-                .Where(a => employeeIds.Contains(a.EmployeeId) && a.Project.Status == "Active")
-                .Select(a => new { a.EmployeeId, ProjectName = a.Project.Name })
+                .Where(a => employeeIds.Contains(a.EmployeeId) && a.Project!.Status == "Active")
+                .Select(a => new { a.EmployeeId, ProjectName = a.Project!.Name })
                 .ToListAsync();
 
             return employeeIds.ToDictionary(
@@ -228,7 +228,7 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.ProjectManager
         /// </summary>
         public async Task<Dictionary<string, bool>> AreEmployeesAssignedToProjectAsync(string projectId, List<string> employeeIds)
         {
-            if (!employeeIds?.Any() == true)
+            if (employeeIds == null || !employeeIds.Any())
             {
                 return new Dictionary<string, bool>();
             }
@@ -250,7 +250,7 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.ProjectManager
         /// </summary>
         public async Task<Dictionary<string, int>> GetProjectAssignmentCountsAsync(List<string> projectIds)
         {
-            if (!projectIds?.Any() == true)
+            if (projectIds == null || !projectIds.Any())
             {
                 return new Dictionary<string, int>();
             }

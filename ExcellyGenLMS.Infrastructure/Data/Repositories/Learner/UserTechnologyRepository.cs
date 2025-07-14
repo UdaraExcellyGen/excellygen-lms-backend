@@ -1,3 +1,5 @@
+// Path: ExcellyGenLMS.Infrastructure/Data/Repositories/Learner/UserTechnologyRepository.cs
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -93,7 +95,7 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Learner
         {
             try
             {
-                if (!userIds?.Any() == true)
+                if (userIds == null || !userIds.Any())
                 {
                     return new Dictionary<string, List<string>>();
                 }
@@ -103,7 +105,7 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Learner
                 var userTechnologies = await _context.UserTechnologies
                     .Include(ut => ut.Technology)
                     .Where(ut => userIds.Contains(ut.UserId))
-                    .Select(ut => new { ut.UserId, TechnologyName = ut.Technology.Name })
+                    .Select(ut => new { ut.UserId, TechnologyName = ut.Technology!.Name })
                     .ToListAsync();
 
                 var skillsDict = userIds.ToDictionary(
@@ -130,7 +132,7 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Learner
         {
             try
             {
-                if (!userIds?.Any() == true)
+                if (userIds == null || !userIds.Any())
                 {
                     return new Dictionary<string, int>();
                 }
