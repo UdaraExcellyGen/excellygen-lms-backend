@@ -7,11 +7,11 @@ using System.Threading.Tasks;
 
 namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Learner
 {
-    public class UserBadgeRepository : IUserBadgeRepository
+    public class BadgeRepository : IBadgeRepository
     {
         private readonly ApplicationDbContext _context;
 
-        public UserBadgeRepository(ApplicationDbContext context)
+        public BadgeRepository(ApplicationDbContext context)
         {
             _context = context;
         }

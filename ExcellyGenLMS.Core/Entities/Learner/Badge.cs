@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
@@ -7,25 +6,14 @@ namespace ExcellyGenLMS.Core.Entities.Learner
     public class Badge
     {
         [Key]
-        public string Id { get; set; } = Guid.NewGuid().ToString();
-
-        [Required]
-        [StringLength(100)]
-        public required string Name { get; set; }
-
-        [StringLength(500)]
-        public string? Description { get; set; }
-
-        [StringLength(100)]
-        public string? Icon { get; set; } // Icon name (Trophy, Book, Award, etc.)
-
-        [StringLength(50)]
-        public string? Color { get; set; } = "#BF4BF6"; // Color hex code for badges
-
-        [StringLength(255)]
-        public string? ImagePath { get; set; } // Path to badge image (PNG)
-
-
-        public virtual ICollection<UserBadge> UserBadges { get; set; } = new List<UserBadge>();
+        public required string Id { get; set; }
+        public required string Title { get; set; }
+        public required string Description { get; set; }
+        public required string HowToEarn { get; set; }
+        public required string IconPath { get; set; }
+        public int TargetProgress { get; set; }
+        public required string Category { get; set; }
+        public required string Color { get; set; }
+        public ICollection<UserBadge> UserBadges { get; set; } = new List<UserBadge>();
     }
 }

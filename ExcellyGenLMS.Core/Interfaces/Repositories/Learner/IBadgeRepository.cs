@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 
 namespace ExcellyGenLMS.Core.Interfaces.Repositories.Learner
 {
-    public interface IUserBadgeRepository
+    public interface IBadgeRepository
     {
         Task<IEnumerable<Badge>> GetAllBadgesAsync();
         Task<IEnumerable<UserBadge>> GetUserBadgesByUserIdAsync(string userId);
