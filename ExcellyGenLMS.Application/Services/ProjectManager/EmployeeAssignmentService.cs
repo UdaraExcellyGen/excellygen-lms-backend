@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+
 using ExcellyGenLMS.Application.DTOs.ProjectManager;
 using ExcellyGenLMS.Application.Interfaces.ProjectManager;
 using ExcellyGenLMS.Application.Interfaces.Learner;
@@ -42,20 +43,32 @@ namespace ExcellyGenLMS.Application.Services.ProjectManager
 
         public async Task<IEnumerable<EmployeeDto>> GetAvailableEmployeesAsync(EmployeeFilterDto? filter = null)
         {
-            _logger.LogInformation("Getting available employees with filter");
+            _logger.LogInformation("Getting available employees with filter - OPTIMIZED VERSION");
 
             var users = await _userRepository.GetAllUsersAsync();
 
             // Filter for active employees only
             var employees = users.Where(u => u.Status == "active").ToList();
+            var employeeIds = employees.Select(e => e.Id).ToList();
+
+            _logger.LogInformation($"Loading bulk data for {employeeIds.Count} employees");
+
+            // OPTIMIZATION: Load all related data in bulk queries instead of N+1 individual queries
+            var bulkWorkloads = await _assignmentRepository.GetEmployeesCurrentWorkloadAsync(employeeIds);
+            var bulkSkills = await _userTechnologyRepository.GetSkillsForMultipleUsersAsync(employeeIds);
+            var bulkAssignments = await _assignmentRepository.GetEmployeesAssignmentsWithProjectsAsync(employeeIds);
+            var bulkActiveProjects = await _assignmentRepository.GetEmployeesActiveProjectNamesAsync(employeeIds);
+
+            _logger.LogInformation("Bulk data loaded successfully, building employee DTOs");
 
             var employeeDtos = new List<EmployeeDto>();
 
             foreach (var employee in employees)
             {
-                var workload = await _assignmentRepository.GetEmployeeCurrentWorkloadAsync(employee.Id);
-                var skills = await GetEmployeeSkillsAsync(employee.Id);
-                var assignments = await _assignmentRepository.GetEmployeeAssignmentsWithProjectsAsync(employee.Id);
+                var workload = bulkWorkloads.GetValueOrDefault(employee.Id, 0);
+                var skills = bulkSkills.GetValueOrDefault(employee.Id, new List<string>());
+                var assignments = bulkAssignments.GetValueOrDefault(employee.Id, new List<PMEmployeeAssignment>());
+                var activeProjects = bulkActiveProjects.GetValueOrDefault(employee.Id, new List<string>());
 
                 var employeeDto = new EmployeeDto
                 {
@@ -67,8 +80,8 @@ namespace ExcellyGenLMS.Application.Services.ProjectManager
                     Status = employee.Status,
                     CurrentWorkloadPercentage = workload,
                     AvailableWorkloadPercentage = Math.Max(0, 100 - workload),
-                    Skills = skills.ToList(),
-                    ActiveProjects = assignments.Select(a => a.Project.Name).Distinct().ToList(),
+                    Skills = skills,
+                    ActiveProjects = activeProjects,
                     CurrentAssignments = assignments.Select(MapToAssignmentDto).ToList()
                 };
 
@@ -76,50 +89,10 @@ namespace ExcellyGenLMS.Application.Services.ProjectManager
             }
 
             // Apply filters if provided
-            if (filter != null)
-            {
-                if (!string.IsNullOrEmpty(filter.SearchTerm))
-                {
-                    var searchLower = filter.SearchTerm.ToLower();
-                    employeeDtos = employeeDtos.Where(e =>
-                        e.Name.ToLower().Contains(searchLower) ||
-                        e.Email.ToLower().Contains(searchLower) ||
-                        e.Role.ToLower().Contains(searchLower) ||
-                        e.Id.ToLower().Contains(searchLower)
-                    ).ToList();
-                }
+            var filteredEmployees = ApplyFilters(employeeDtos, filter);
 
-                if (filter.RequiredSkills?.Any() == true)
-                {
-                    employeeDtos = employeeDtos.Where(e =>
-                        filter.RequiredSkills.All(skill =>
-                            e.Skills.Any(empSkill =>
-                                empSkill.Equals(skill, StringComparison.OrdinalIgnoreCase))
-                        )
-                    ).ToList();
-                }
-
-                if (!string.IsNullOrEmpty(filter.Department))
-                {
-                    employeeDtos = employeeDtos.Where(e =>
-                        e.Department.Equals(filter.Department, StringComparison.OrdinalIgnoreCase)
-                    ).ToList();
-                }
-
-                if (filter.AvailableOnly == true)
-                {
-                    employeeDtos = employeeDtos.Where(e => e.AvailableWorkloadPercentage > 0).ToList();
-                }
-
-                if (filter.MinAvailableWorkload.HasValue)
-                {
-                    employeeDtos = employeeDtos.Where(e =>
-                        e.AvailableWorkloadPercentage >= filter.MinAvailableWorkload.Value
-                    ).ToList();
-                }
-            }
-
-            return employeeDtos.OrderBy(e => e.Name);
+            _logger.LogInformation($"Returning {filteredEmployees.Count()} filtered employees");
+            return filteredEmployees;
         }
 
         public async Task<IEnumerable<EmployeeDto>> GetEmployeesWithMatchingSkillsAsync(List<string> requiredSkills)
@@ -140,6 +113,7 @@ namespace ExcellyGenLMS.Application.Services.ProjectManager
             if (user == null)
                 throw new KeyNotFoundException($"Employee with ID {employeeId} not found");
 
+            // Load related data for single employee
             var workload = await _assignmentRepository.GetEmployeeCurrentWorkloadAsync(employeeId);
             var skills = await GetEmployeeSkillsAsync(employeeId);
             var assignments = await _assignmentRepository.GetEmployeeAssignmentsWithProjectsAsync(employeeId);
@@ -263,10 +237,17 @@ namespace ExcellyGenLMS.Application.Services.ProjectManager
                 throw new InvalidOperationException("Project not found");
             }
 
+            // Validate all assignments first
+            var employeeIds = request.Assignments.Select(a => a.EmployeeId).ToList();
+            var currentWorkloads = await _assignmentRepository.GetEmployeesCurrentWorkloadAsync(employeeIds);
+
             foreach (var assignmentRequest in request.Assignments)
             {
-                // Validate each assignment
-                if (!await ValidateAssignmentAsync(assignmentRequest.EmployeeId, assignmentRequest.WorkloadPercentage))
+                var currentWorkload = currentWorkloads.GetValueOrDefault(assignmentRequest.EmployeeId, 0);
+                var newTotalWorkload = currentWorkload + assignmentRequest.WorkloadPercentage;
+
+                // Validate workload
+                if (newTotalWorkload > 100)
                 {
                     var user = await _userRepository.GetUserByIdAsync(assignmentRequest.EmployeeId);
                     validationErrors.Add($"Employee {user?.Name ?? assignmentRequest.EmployeeId} would be over-allocated");
@@ -396,24 +377,27 @@ namespace ExcellyGenLMS.Application.Services.ProjectManager
 
             var result = await _assignmentRepository.DeleteAsync(assignmentId);
 
-            // Create notification for the removed assignment
-            if (result && project != null)
+            if (result)
             {
-                try
+                // Create notification for the removed assignment
+                if (project != null)
                 {
-                    await _notificationService.CreateProjectRemovalNotificationAsync(
-                        employeeId: assignment.EmployeeId,
-                        projectId: assignment.ProjectId,
-                        projectName: project.Name,
-                        assignerName: project.Creator?.Name ?? "Project Manager"
-                    );
+                    try
+                    {
+                        await _notificationService.CreateProjectRemovalNotificationAsync(
+                            employeeId: assignment.EmployeeId,
+                            projectId: assignment.ProjectId,
+                            projectName: project.Name,
+                            assignerName: project.Creator?.Name ?? "Project Manager"
+                        );
 
-                    _logger.LogInformation($"Created removal notification for assignment {assignmentId}");
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, $"Failed to create notification for assignment removal {assignmentId}");
-                    // Don't fail the removal if notification creation fails
+                        _logger.LogInformation($"Created removal notification for assignment {assignmentId}");
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, $"Failed to create notification for assignment removal {assignmentId}");
+                        // Don't fail the removal if notification creation fails
+                    }
                 }
             }
 
@@ -429,24 +413,27 @@ namespace ExcellyGenLMS.Application.Services.ProjectManager
 
             var result = await _assignmentRepository.DeleteByProjectAndEmployeeAsync(projectId, employeeId);
 
-            // Create notification for the removed assignment
-            if (result && project != null)
+            if (result)
             {
-                try
+                // Create notification for the removed assignment
+                if (project != null)
                 {
-                    await _notificationService.CreateProjectRemovalNotificationAsync(
-                        employeeId: employeeId,
-                        projectId: projectId,
-                        projectName: project.Name,
-                        assignerName: project.Creator?.Name ?? "Project Manager"
-                    );
+                    try
+                    {
+                        await _notificationService.CreateProjectRemovalNotificationAsync(
+                            employeeId: employeeId,
+                            projectId: projectId,
+                            projectName: project.Name,
+                            assignerName: project.Creator?.Name ?? "Project Manager"
+                        );
 
-                    _logger.LogInformation($"Created removal notification for employee {employeeId} from project {projectId}");
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, $"Failed to create notification for employee {employeeId} removal from project {projectId}");
-                    // Don't fail the removal if notification creation fails
+                        _logger.LogInformation($"Created removal notification for employee {employeeId} from project {projectId}");
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, $"Failed to create notification for employee {employeeId} removal from project {projectId}");
+                        // Don't fail the removal if notification creation fails
+                    }
                 }
             }
 
@@ -478,7 +465,8 @@ namespace ExcellyGenLMS.Application.Services.ProjectManager
             try
             {
                 var userTechnologies = await _userTechnologyRepository.GetUserTechnologiesAsync(employeeId);
-                return userTechnologies.Select(ut => ut.Technology.Name).ToList();
+                var skills = userTechnologies.Select(ut => ut.Technology.Name).ToList();
+                return skills;
             }
             catch (Exception ex)
             {
@@ -486,6 +474,8 @@ namespace ExcellyGenLMS.Application.Services.ProjectManager
                 return new List<string>();
             }
         }
+
+        // PRIVATE HELPER METHODS
 
         private static EmployeeAssignmentDto MapToAssignmentDto(PMEmployeeAssignment assignment)
         {
@@ -500,6 +490,55 @@ namespace ExcellyGenLMS.Application.Services.ProjectManager
                 WorkloadPercentage = assignment.WorkloadPercentage,
                 AssignedDate = assignment.AssignedDate
             };
+        }
+
+        private static IEnumerable<EmployeeDto> ApplyFilters(IEnumerable<EmployeeDto> employees, EmployeeFilterDto? filter)
+        {
+            if (filter == null) return employees;
+
+            var filtered = employees.AsEnumerable();
+
+            if (!string.IsNullOrEmpty(filter.SearchTerm))
+            {
+                var searchLower = filter.SearchTerm.ToLower();
+                filtered = filtered.Where(e =>
+                    e.Name.ToLower().Contains(searchLower) ||
+                    e.Email.ToLower().Contains(searchLower) ||
+                    e.Role.ToLower().Contains(searchLower) ||
+                    e.Id.ToLower().Contains(searchLower)
+                );
+            }
+
+            if (filter.RequiredSkills?.Any() == true)
+            {
+                filtered = filtered.Where(e =>
+                    filter.RequiredSkills.All(skill =>
+                        e.Skills.Any(empSkill =>
+                            empSkill.Equals(skill, StringComparison.OrdinalIgnoreCase))
+                    )
+                );
+            }
+
+            if (!string.IsNullOrEmpty(filter.Department))
+            {
+                filtered = filtered.Where(e =>
+                    e.Department.Equals(filter.Department, StringComparison.OrdinalIgnoreCase)
+                );
+            }
+
+            if (filter.AvailableOnly == true)
+            {
+                filtered = filtered.Where(e => e.AvailableWorkloadPercentage > 0);
+            }
+
+            if (filter.MinAvailableWorkload.HasValue)
+            {
+                filtered = filtered.Where(e =>
+                    e.AvailableWorkloadPercentage >= filter.MinAvailableWorkload.Value
+                );
+            }
+
+            return filtered.OrderBy(e => e.Name);
         }
     }
 }
