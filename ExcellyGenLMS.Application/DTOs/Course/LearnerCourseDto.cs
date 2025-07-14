@@ -17,6 +17,7 @@ namespace ExcellyGenLMS.Application.DTOs.Course
         public bool HasQuiz { get; set; } // Indicates if this lesson has an associated quiz
         public int? QuizId { get; set; } // The ID of the quiz for this lesson, if any
         public bool IsQuizCompleted { get; set; } // Indicates if the quiz for this lesson is completed by the learner
+        public int? LastAttemptId { get; set; }
     }
 
     // DTO for a course in the learner's view (e.g., on their dashboard or course content page)
