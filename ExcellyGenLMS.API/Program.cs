@@ -1,4 +1,5 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿// ExcellyGenLMS.API/Program.cs - Updated with External Certificate Services
+using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
@@ -304,6 +305,11 @@ static void RegisterRepositories(IServiceCollection services)
     services.AddScoped<IEmployeeAssignmentService, EmployeeAssignmentService>();
 
 
+
+    // ===== EXTERNAL CERTIFICATE REPOSITORY - ADDED =====
+    services.AddScoped<IExternalCertificateRepository, ExternalCertificateRepository>();
+
+    // Assessment Repositories
     services.AddScoped<IQuizRepository, QuizRepository>();
     services.AddScoped<IQuizAttemptRepository, QuizAttemptRepository>();
     services.AddScoped<IUserBadgeRepository, UserBadgeRepository>();
@@ -317,7 +323,12 @@ static void RegisterRepositories(IServiceCollection services)
     services.AddScoped<IProjectRepository, ProjectRepository>();
     services.AddScoped<IRoleRepository, RoleRepository>();
     services.AddScoped<IPMEmployeeAssignmentRepository, PMEmployeeAssignmentRepository>();
+
+
+    Console.WriteLine("Repository registrations completed with External Certificate support");
+
     Console.WriteLine("Repository registrations completed");
+
 }
 
 static void RegisterApplicationServices(IServiceCollection services)
@@ -349,6 +360,8 @@ static void RegisterApplicationServices(IServiceCollection services)
     services.AddScoped<ICourseCoordinatorAnalyticsService, CourseCoordinatorAnalyticsService>();
 
 
+    services.AddScoped<IExternalCertificateService, ExternalCertificateService>();
+
     services.AddScoped<IQuizService, QuizService>();
     services.AddScoped<IQuizAttemptService, QuizAttemptService>();
     services.AddScoped<IUserBadgeService, UserBadgeService>();
@@ -369,11 +382,15 @@ static void RegisterApplicationServices(IServiceCollection services)
         ExcellyGenLMS.Application.Services.ProjectManager.PMTechnologyService>();
         services.AddScoped<ICourseCoordinatorAnalyticsService, CourseCoordinatorAnalyticsService>();
 
+
+    Console.WriteLine("Application services registration completed with External Certificate support and caching optimization");
+
     services.AddScoped<ExcellyGenLMS.Application.Interfaces.ProjectManager.IProjectService, ExcellyGenLMS.Application.Services.ProjectManager.ProjectService>();
     services.AddScoped<ExcellyGenLMS.Application.Interfaces.ProjectManager.IRoleService, ExcellyGenLMS.Application.Services.ProjectManager.RoleService>();
     services.AddScoped<ExcellyGenLMS.Application.Interfaces.ProjectManager.IPMTechnologyService, ExcellyGenLMS.Application.Services.ProjectManager.PMTechnologyService>();
     services.AddScoped<IEmployeeAssignmentService, EmployeeAssignmentService>();
     Console.WriteLine("Application services registration completed with caching optimization");
+
 }
 
 static void ConfigureMiddlewarePipeline(WebApplication app)

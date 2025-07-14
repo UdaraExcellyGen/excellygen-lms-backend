@@ -1,4 +1,4 @@
-// ExcellyGenLMS.Infrastructure/Data/ApplicationDbContext.cs
+// ExcellyGenLMS.Infrastructure/Data/ApplicationDbContext.cs - Updated with External Certificates
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking; // For ValueComparer
 using ExcellyGenLMS.Core.Entities.Auth;
@@ -60,6 +60,7 @@ namespace ExcellyGenLMS.Infrastructure.Data
         public DbSet<QuizBankQuestion> QuizBankQuestions { get; set; } = null!;
         public DbSet<Enrollment> Enrollments { get; set; } = null!;
         public DbSet<Certificate> Certificates { get; set; } = null!;
+        public DbSet<ExternalCertificate> ExternalCertificates { get; set; } = null!; // ADDED FOR EXTERNAL CERTIFICATES
         public DbSet<LessonProgress> LessonProgress { get; set; } = null!;
 
         // Quiz Attempt Module
@@ -429,6 +430,39 @@ namespace ExcellyGenLMS.Infrastructure.Data
                 .WithMany()
                 .HasForeignKey(c => c.CourseId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            // ===== EXTERNAL CERTIFICATE CONFIGURATION =====
+            modelBuilder.Entity<ExternalCertificate>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+
+                // Relationship: ExternalCertificate -> User
+                entity.HasOne(e => e.User)
+                      .WithMany()
+                      .HasForeignKey(e => e.UserId)
+                      .OnDelete(DeleteBehavior.Cascade);
+
+                // Indexes for better performance
+                entity.HasIndex(e => e.UserId);
+                entity.HasIndex(e => e.CompletionDate);
+                entity.HasIndex(e => e.Platform);
+
+                // Default values for timestamps
+                entity.Property(e => e.CreatedAt)
+                      .HasDefaultValueSql("GETUTCDATE()");
+
+                entity.Property(e => e.UpdatedAt)
+                      .HasDefaultValueSql("GETUTCDATE()");
+
+                // String length constraints (already defined in entity)
+                entity.Property(e => e.Title).HasMaxLength(500).IsRequired();
+                entity.Property(e => e.Issuer).HasMaxLength(200).IsRequired();
+                entity.Property(e => e.Platform).HasMaxLength(100).IsRequired();
+                entity.Property(e => e.CredentialUrl).HasMaxLength(1000);
+                entity.Property(e => e.CredentialId).HasMaxLength(200);
+                entity.Property(e => e.Description).HasMaxLength(2000);
+                entity.Property(e => e.ImageUrl).HasMaxLength(1000);
+            });
 
             // Configure LessonProgress entity
             modelBuilder.Entity<LessonProgress>(entity =>
