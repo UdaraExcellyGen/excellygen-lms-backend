@@ -31,6 +31,7 @@ namespace ExcellyGenLMS.Application.DTOs.Course
         public CategoryDto Category { get; set; } = null!;
         public List<TechnologyDto> Technologies { get; set; } = new();
         public CourseStatus Status { get; set; } // Course status (e.g., Draft, Published)
+        public bool IsInactive { get; set; }
 
         // Learner-specific fields
         public bool IsEnrolled { get; set; }

@@ -15,6 +15,7 @@ namespace ExcellyGenLMS.Application.DTOs.Course
         public DateTime CreatedAt { get; set; }
         public DateTime LastUpdatedDate { get; set; }
         public CourseStatus Status { get; set; }
+        public bool IsInactive { get; set; }
         public string? ThumbnailUrl { get; set; } // Publicly accessible URL from file service
         public required CategoryDto Category { get; set; } // Nested DTO for Category info
         public required UserBasicDto Creator { get; set; }   // Nested DTO for basic Creator info

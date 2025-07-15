@@ -30,6 +30,9 @@ namespace ExcellyGenLMS.Core.Entities.Course
 
         public CourseStatus Status { get; set; } = CourseStatus.Draft;
 
+        [Required]
+        public bool IsInactive { get; set; } = false;
+
         [MaxLength(1024)] // Store URL/path, Increased length
         public string? ThumbnailImagePath { get; set; } // Renamed
 

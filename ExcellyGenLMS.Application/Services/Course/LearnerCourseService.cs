@@ -41,14 +41,18 @@ namespace ExcellyGenLMS.Application.Services.Course
 
         public async Task<IEnumerable<LearnerCourseDto>> GetAvailableCoursesAsync(string userId, string? categoryId = null)
         {
-            var allCourses = await _courseRepository.GetAllPublishedCoursesWithDetailsAsync();
+            _logger.LogInformation("Getting available courses for user {UserId}, category: {CategoryId}", userId, categoryId ?? "All");
+            var allCourses = (await _courseRepository.GetAllPublishedCoursesWithDetailsAsync()).ToList();
             var userEnrollments = await _enrollmentRepository.GetEnrollmentsByUserIdAsync(userId);
             var enrolledCourseIds = userEnrollments.Select(e => e.CourseId).ToHashSet();
-
-            return allCourses
-                .Where(c => !enrolledCourseIds.Contains(c.Id) && (categoryId == null || c.CategoryId == categoryId))
-                .Select(c => MapCourseToLightweightDto(c, false))
+            var availableCourses = allCourses
+                .Where(course => !enrolledCourseIds.Contains(course.Id) &&
+                                !course.IsInactive &&
+                               (categoryId == null || course.CategoryId == categoryId))
+                .Select(course => MapCourseToLightweightDto(course, false))
                 .ToList();
+            _logger.LogInformation("Found {Count} available courses for user {UserId}.", availableCourses.Count, userId);
+            return availableCourses;
         }
 
         public async Task<IEnumerable<LearnerCourseDto>> GetEnrolledCoursesAsync(string userId)
@@ -61,11 +65,6 @@ namespace ExcellyGenLMS.Application.Services.Course
 
                 var enrolledCourseIds = enrollments.Select(e => e.CourseId).ToList();
 
-                //
-                // THIS IS THE CRITICAL FIX:
-                // We now `await` each database call sequentially to prevent DbContext concurrency issues.
-                // This is still vastly more performant than the original N+1 problem.
-                //
                 var allLessons = (await _courseRepository.GetLessonsByCourseIdsAsync(enrolledCourseIds)).ToLookup(l => l.CourseId);
                 var allProgresses = (await _lessonProgressRepository.GetProgressByUserIdAndCourseIdsAsync(userId, enrolledCourseIds)).ToDictionary(p => p.LessonId);
                 var allQuizzes = (await _quizService.GetQuizzesByCourseIdsAsync(enrolledCourseIds)).ToLookup(q => q.LessonId);
@@ -125,6 +124,7 @@ namespace ExcellyGenLMS.Application.Services.Course
                         Title = course.Title,
                         Description = course.Description,
                         EstimatedTime = course.EstimatedTime,
+                        IsInactive = course.IsInactive,
                         ThumbnailUrl = course.ThumbnailImagePath != null ? _fileStorageService.GetFileUrl(course.ThumbnailImagePath) : string.Empty,
                         Category = course.Category != null
                             ? new CategoryDto { Id = course.Category.Id, Title = course.Category.Title }
@@ -155,6 +155,7 @@ namespace ExcellyGenLMS.Application.Services.Course
 
         public async Task<LearnerCourseDto?> GetLearnerCourseDetailsAsync(string userId, int courseId)
         {
+            // This implementation now works correctly with the detailed GetEnrolledCoursesAsync method above.
             var enrolledCourses = await GetEnrolledCoursesAsync(userId);
             return enrolledCourses.FirstOrDefault(c => c.Id == courseId);
         }
@@ -180,7 +181,7 @@ namespace ExcellyGenLMS.Application.Services.Course
             var lessonsInCourse = await _courseRepository.GetLessonsByCourseIdAsync(lesson.CourseId);
             var completedLessonsForCourse = await _lessonProgressRepository.GetProgressByUserIdAndCourseIdAsync(userId, lesson.CourseId);
 
-            if (lessonsInCourse.Count() > 0 && completedLessonsForCourse.Count() >= lessonsInCourse.Count())
+            if (lessonsInCourse.Any() && completedLessonsForCourse.Count() >= lessonsInCourse.Count())
             {
                 if (enrollment.Status != "completed")
                 {
@@ -214,6 +215,7 @@ namespace ExcellyGenLMS.Application.Services.Course
                 Title = course.Title,
                 Description = course.Description,
                 EstimatedTime = course.EstimatedTime,
+                IsInactive = course.IsInactive,
                 ThumbnailUrl = course.ThumbnailImagePath != null ? _fileStorageService.GetFileUrl(course.ThumbnailImagePath) : string.Empty,
                 Category = course.Category != null
                     ? new CategoryDto { Id = course.Category.Id, Title = course.Category.Title }
@@ -226,7 +228,8 @@ namespace ExcellyGenLMS.Application.Services.Course
                 IsEnrolled = isEnrolled,
                 EnrollmentDate = enrollment?.EnrollmentDate,
                 EnrollmentStatus = enrollment?.Status ?? "not_enrolled",
-                EnrollmentId = enrollment?.Id
+                EnrollmentId = enrollment?.Id,
+                Lessons = new List<LearnerLessonDto>() // Lightweight DTO has no lesson details
             };
         }
     }

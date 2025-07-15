@@ -16,6 +16,10 @@ namespace ExcellyGenLMS.Application.Interfaces.Course
         Task DeleteCourseAsync(int courseId);
         Task PublishCourseAsync(int courseId);
 
+        //Methods for soft deletion
+        Task DeactivateCourseAsync(int courseId);
+        Task ReactivateCourseAsync(int courseId);
+
         // --- Lesson (Subtopic) Management ---
         Task<LessonDto?> GetLessonByIdAsync(int lessonId);
         Task<LessonDto> AddLessonAsync(CreateLessonDto createLessonDto);
