@@ -1,4 +1,4 @@
-// C:\Users\ASUS\Desktop\quizz\excellygen-lms-backend\ExcellyGenLMS.Application\Services\Course\CourseService.cs
+﻿// C:\Users\ASUS\Desktop\quizz\excellygen-lms-backend\ExcellyGenLMS.Application\Services\Course\CourseService.cs
 using ExcellyGenLMS.Application.DTOs.Course;
 using ExcellyGenLMS.Application.Interfaces.Course;
 using ExcellyGenLMS.Core.Entities.Course;
@@ -302,6 +302,66 @@ namespace ExcellyGenLMS.Application.Services.Course
             _logger.LogInformation("Course {CourseId} published with {Points} points.", courseId, averagePoints);
         }
 
+        //public async Task DeactivateCourseAsync(int courseId)
+        //{
+        //    _logger.LogInformation("Attempting to deactivate course {CourseId}", courseId);
+        //    var course = await _courseRepository.GetByIdAsync(courseId);
+        //    if (course == null)
+        //    {
+        //        throw new KeyNotFoundException($"Course {courseId} not found.");
+        //    }
+        //    if (course.Status != CourseStatus.Published)
+        //    {
+        //        throw new InvalidOperationException("Only published courses can be deactivated.");
+        //    }
+
+        //    course.IsInactive = true;
+        //    course.LastUpdatedDate = DateTime.UtcNow;
+
+        //    await _courseRepository.UpdateAsync(course);
+        //    _logger.LogInformation("Course {CourseId} deactivated successfully.", courseId);
+        //}
+        public async Task DeactivateCourseAsync(int courseId)
+        {
+            _logger.LogInformation("Attempting to deactivate course {CourseId}", courseId);
+            var course = await _courseRepository.GetByIdAsync(courseId);
+            if (course == null)
+            {
+                throw new KeyNotFoundException($"Course {courseId} not found.");
+            }
+
+            // ▼▼▼ THIS IS THE CRITICAL CHECK ▼▼▼
+            if (course.Status != CourseStatus.Published)
+            {
+                // The course status is 'Draft', so this condition is TRUE.
+                // An exception is thrown immediately.
+                throw new InvalidOperationException("Only published courses can be deactivated.");
+            }
+            // ▲▲▲ The code never reaches this point for a Draft course. ▲▲▲
+
+            course.IsInactive = true;
+            course.LastUpdatedDate = DateTime.UtcNow;
+
+            await _courseRepository.UpdateAsync(course);
+            _logger.LogInformation("Course {CourseId} deactivated successfully.", courseId);
+        }
+
+        public async Task ReactivateCourseAsync(int courseId)
+        {
+            _logger.LogInformation("Attempting to reactivate course {CourseId}", courseId);
+            var course = await _courseRepository.GetByIdAsync(courseId);
+            if (course == null)
+            {
+                throw new KeyNotFoundException($"Course {courseId} not found.");
+            }
+
+            course.IsInactive = false;
+            course.LastUpdatedDate = DateTime.UtcNow;
+
+            await _courseRepository.UpdateAsync(course);
+            _logger.LogInformation("Course {CourseId} reactivated successfully.", courseId);
+        }
+
         public async Task DeleteCourseAsync(int courseId)
         {
             _logger.LogInformation("Attempting to delete course {CourseId}", courseId);
@@ -533,6 +593,7 @@ namespace ExcellyGenLMS.Application.Services.Course
                 CreatedAt = course.CreatedAt,
                 LastUpdatedDate = course.LastUpdatedDate,
                 Status = course.Status,
+                IsInactive = course.IsInactive,
                 ThumbnailUrl = !string.IsNullOrWhiteSpace(course.ThumbnailImagePath) ? _fileStorageService.GetFileUrl(course.ThumbnailImagePath) : null,
                 Category = categoryDto,
                 Creator = creatorDto,

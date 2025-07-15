@@ -185,7 +185,65 @@ namespace ExcellyGenLMS.API.Controllers.Course
             catch (InvalidOperationException ex) { _logger.LogWarning(ex, "Publish failed: Business rule violation for course {CourseId}: {ErrorMessage}", courseId, ex.Message); return BadRequest(new { message = ex.Message }); }
             catch (Exception ex) { _logger.LogError(ex, "Unexpected error publishing course {CourseId}", courseId); return StatusCode(StatusCodes.Status500InternalServerError, new { message = "An unexpected error occurred while publishing the course." }); }
         }
+        //inactive put
+        [HttpPut("{courseId}/deactivate")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)] // For business rule violations
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> DeactivateCourse(int courseId)
+        {
+            _logger.LogInformation("Received request to deactivate course: {CourseId}", courseId);
+            try
+            {
+                await _courseService.DeactivateCourseAsync(courseId);
+                _logger.LogInformation("Course {CourseId} deactivated successfully.", courseId);
+                return NoContent();
+            }
+            catch (KeyNotFoundException ex)
+            {
+                _logger.LogWarning(ex, "Deactivate failed: Course not found: ID {CourseId}", courseId);
+                return NotFound(new { message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                _logger.LogWarning(ex, "Deactivate failed: Business rule violation for course {CourseId}: {ErrorMessage}", courseId, ex.Message);
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected error deactivating course {CourseId}", courseId);
+                return StatusCode(StatusCodes.Status500InternalServerError, new { message = "An unexpected error occurred." });
+            }
+        }
 
+        // --- NEW: Reactivate Course ---
+        [HttpPut("{courseId}/reactivate")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> ReactivateCourse(int courseId)
+        {
+            _logger.LogInformation("Received request to reactivate course: {CourseId}", courseId);
+            try
+            {
+                await _courseService.ReactivateCourseAsync(courseId);
+                _logger.LogInformation("Course {CourseId} reactivated successfully.", courseId);
+                return NoContent();
+            }
+            catch (KeyNotFoundException ex)
+            {
+                _logger.LogWarning(ex, "Reactivate failed: Course not found: ID {CourseId}", courseId);
+                return NotFound(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected error reactivating course {CourseId}", courseId);
+                return StatusCode(StatusCodes.Status500InternalServerError, new { message = "An unexpected error occurred." });
+            }
+        }
 
         // --- DELETE /api/courses/{courseId} ---
         [HttpDelete("{courseId}")]
@@ -197,8 +255,8 @@ namespace ExcellyGenLMS.API.Controllers.Course
         public async Task<IActionResult> DeleteCourse(int courseId)
         {
             // (Implementation remains the same)
-            _logger.LogInformation("Received request to delete course: {CourseId}", courseId);
-            try { await _courseService.DeleteCourseAsync(courseId); _logger.LogInformation("Course {CourseId} deleted successfully.", courseId); return NoContent(); }
+            _logger.LogInformation("Received request to HARD delete course: {CourseId}", courseId);
+            try { await _courseService.DeleteCourseAsync(courseId); _logger.LogInformation("Course {CourseId} deleted successfully from the database.", courseId); return NoContent(); }
             catch (KeyNotFoundException ex) { _logger.LogWarning(ex, "Delete failed: Course not found: ID {CourseId}", courseId); return NotFound(new { message = ex.Message }); }
             catch (Exception ex) { _logger.LogError(ex, "Unexpected error deleting course {CourseId}", courseId); return StatusCode(StatusCodes.Status500InternalServerError, new { message = "An unexpected error occurred while deleting the course." }); }
         }

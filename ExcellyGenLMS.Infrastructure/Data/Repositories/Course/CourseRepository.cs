@@ -53,7 +53,7 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
         public async Task<IEnumerable<Core.Entities.Course.Course>> GetAllPublishedCoursesWithDetailsAsync()
         {
             return await _context.Courses
-                .Where(c => c.Status == CourseStatus.Published)
+                .Where(c => c.Status == CourseStatus.Published && !c.IsInactive)
                 .Include(c => c.Category)
                 .Include(c => c.Creator)
                 .Include(c => c.CourseTechnologies)
