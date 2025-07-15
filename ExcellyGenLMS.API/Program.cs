@@ -1,5 +1,4 @@
-﻿// ExcellyGenLMS.API/Program.cs - Updated with External Certificate Services
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
@@ -9,8 +8,6 @@ using Microsoft.OpenApi.Models;
 using Microsoft.AspNetCore.Identity;
 using System.Data;
 using Microsoft.Data.SqlClient;
-
-// Infrastructure Layer
 using ExcellyGenLMS.Infrastructure.Data;
 using ExcellyGenLMS.Infrastructure.Data.Repositories.Auth;
 using ExcellyGenLMS.Infrastructure.Data.Repositories.Admin;
@@ -20,8 +17,6 @@ using ExcellyGenLMS.Infrastructure.Data.Repositories.ProjectManager;
 using ExcellyGenLMS.Infrastructure.Services.Auth;
 using ExcellyGenLMS.Infrastructure.Services.Common;
 using ExcellyGenLMS.Infrastructure.Services.Storage;
-
-// Core Layer
 using ExcellyGenLMS.Core.Interfaces.Repositories.Auth;
 using ExcellyGenLMS.Core.Interfaces.Repositories.Admin;
 using ExcellyGenLMS.Core.Interfaces.Repositories.Course;
@@ -29,8 +24,6 @@ using ExcellyGenLMS.Core.Interfaces.Repositories.Learner;
 using ExcellyGenLMS.Core.Interfaces.Repositories.ProjectManager;
 using ExcellyGenLMS.Core.Entities.Auth;
 using ExcellyGenLMS.Core.Interfaces.Infrastructure;
-
-// Application Layer
 using ExcellyGenLMS.Application.Interfaces.Auth;
 using ExcellyGenLMS.Application.Interfaces.Admin;
 using ExcellyGenLMS.Application.Interfaces.Common;
@@ -42,18 +35,7 @@ using ExcellyGenLMS.Application.Services.Admin;
 using ExcellyGenLMS.Application.Services.Course;
 using ExcellyGenLMS.Application.Services.Learner;
 using ExcellyGenLMS.Application.Services.ProjectManager;
-
-
-
-// API Layer
 using ExcellyGenLMS.API.Middleware;
-using ExcellyGenLMS.API.Controllers; // Import the base Controllers namespace
-using ExcellyGenLMS.API.Controllers.Admin;
-using ExcellyGenLMS.API.Controllers.Course;
-using ExcellyGenLMS.API.Controllers.Learner;
-using ExcellyGenLMS.API.Controllers.Auth;
-using ExcellyGenLMS.API.Controllers.ProjectManager;
-
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -91,8 +73,6 @@ catch (Exception ex)
     Console.WriteLine($"Application failed to start: {ex.Message}");
     throw;
 }
-
-// ===== CONFIGURATION METHODS =====
 
 static void ConfigureDatabase(WebApplicationBuilder builder)
 {
@@ -239,7 +219,6 @@ static void ConfigureControllers(WebApplicationBuilder builder)
 {
     builder.Services.AddHttpContextAccessor();
     builder.Services.AddControllers()
-        // Add the main assembly to discover controllers like ImageProxyController
         .AddApplicationPart(typeof(Program).Assembly)
         .AddApplicationPart(typeof(ExcellyGenLMS.API.Controllers.Admin.CourseCategoriesController).Assembly)
         .AddApplicationPart(typeof(ExcellyGenLMS.API.Controllers.Course.CoursesController).Assembly)
@@ -302,17 +281,9 @@ static void RegisterRepositories(IServiceCollection services)
     services.AddScoped<IEnrollmentRepository, EnrollmentRepository>();
     services.AddScoped<ILessonProgressRepository, LessonProgressRepository>();
     services.AddScoped<ICertificateRepository, CertificateRepository>();
-    services.AddScoped<IEmployeeAssignmentService, EmployeeAssignmentService>();
-
-
-
-    // ===== EXTERNAL CERTIFICATE REPOSITORY - ADDED =====
     services.AddScoped<IExternalCertificateRepository, ExternalCertificateRepository>();
-
-    // Assessment Repositories
     services.AddScoped<IQuizRepository, QuizRepository>();
     services.AddScoped<IQuizAttemptRepository, QuizAttemptRepository>();
-    services.AddScoped<IUserBadgeRepository, UserBadgeRepository>();
     services.AddScoped<IUserTechnologyRepository, UserTechnologyRepository>();
     services.AddScoped<IUserProjectRepository, UserProjectRepository>();
     services.AddScoped<IUserCertificationRepository, UserCertificationRepository>();
@@ -323,12 +294,12 @@ static void RegisterRepositories(IServiceCollection services)
     services.AddScoped<IProjectRepository, ProjectRepository>();
     services.AddScoped<IRoleRepository, RoleRepository>();
     services.AddScoped<IPMEmployeeAssignmentRepository, PMEmployeeAssignmentRepository>();
+    services.AddScoped<ILeaderboardRepository, LeaderboardRepository>();
 
+    // == NEW BADGE REPOSITORY ==
+    services.AddScoped<IBadgeRepository, BadgeRepository>();
 
-    Console.WriteLine("Repository registrations completed with External Certificate support");
-
-    Console.WriteLine("Repository registrations completed");
-
+    Console.WriteLine("Repository registrations completed.");
 }
 
 static void RegisterApplicationServices(IServiceCollection services)
@@ -358,10 +329,7 @@ static void RegisterApplicationServices(IServiceCollection services)
     services.AddScoped<ILearnerCourseService, LearnerCourseService>();
     services.AddScoped<ICertificateService, CertificateService>();
     services.AddScoped<ICourseCoordinatorAnalyticsService, CourseCoordinatorAnalyticsService>();
-
-
     services.AddScoped<IExternalCertificateService, ExternalCertificateService>();
-
     services.AddScoped<IQuizService, QuizService>();
     services.AddScoped<IQuizAttemptService, QuizAttemptService>();
     services.AddScoped<IUserBadgeService, UserBadgeService>();
@@ -370,27 +338,19 @@ static void RegisterApplicationServices(IServiceCollection services)
     services.AddScoped<IUserCertificationService, UserCertificationService>();
     services.AddScoped<IUserProfileService, UserProfileService>();
     services.AddScoped<IForumService, ForumService>();
-    services.AddScoped<ExcellyGenLMS.Application.Interfaces.Learner.ILearnerStatsService, ExcellyGenLMS.Application.Services.Learner.LearnerStatsService>();
+    services.AddScoped<ILearnerStatsService, LearnerStatsService>();
     services.AddScoped<ICvService, CvService>();
     services.AddScoped<ILearnerNotificationService, LearnerNotificationService>();
-
-    services.AddScoped<ExcellyGenLMS.Application.Interfaces.ProjectManager.IProjectService,
-        ExcellyGenLMS.Application.Services.ProjectManager.ProjectService>();
-    services.AddScoped<ExcellyGenLMS.Application.Interfaces.ProjectManager.IRoleService,
-        ExcellyGenLMS.Application.Services.ProjectManager.RoleService>();
-    services.AddScoped<ExcellyGenLMS.Application.Interfaces.ProjectManager.IPMTechnologyService,
-        ExcellyGenLMS.Application.Services.ProjectManager.PMTechnologyService>();
-        services.AddScoped<ICourseCoordinatorAnalyticsService, CourseCoordinatorAnalyticsService>();
-
-
-    Console.WriteLine("Application services registration completed with External Certificate support and caching optimization");
-
+    services.AddScoped<ILeaderboardService, LeaderboardService>();
+    services.AddScoped<IEmployeeAssignmentService, EmployeeAssignmentService>();
     services.AddScoped<ExcellyGenLMS.Application.Interfaces.ProjectManager.IProjectService, ExcellyGenLMS.Application.Services.ProjectManager.ProjectService>();
     services.AddScoped<ExcellyGenLMS.Application.Interfaces.ProjectManager.IRoleService, ExcellyGenLMS.Application.Services.ProjectManager.RoleService>();
     services.AddScoped<ExcellyGenLMS.Application.Interfaces.ProjectManager.IPMTechnologyService, ExcellyGenLMS.Application.Services.ProjectManager.PMTechnologyService>();
-    services.AddScoped<IEmployeeAssignmentService, EmployeeAssignmentService>();
-    Console.WriteLine("Application services registration completed with caching optimization");
 
+    // == NEW BADGE SERVICE ==
+    services.AddScoped<IBadgesAndRewardsService, BadgesAndRewardsService>();
+
+    Console.WriteLine("Application services registration completed.");
 }
 
 static void ConfigureMiddlewarePipeline(WebApplication app)
@@ -405,13 +365,11 @@ static void ConfigureMiddlewarePipeline(WebApplication app)
             options.RoutePrefix = "swagger";
             options.DocumentTitle = "ExcellyGenLMS API Documentation";
         });
-        Console.WriteLine("Development middleware configured");
     }
     else
     {
         app.UseExceptionHandler("/error");
         app.UseHsts();
-        Console.WriteLine("Production middleware configured");
     }
 
     app.UseHttpsRedirection();
@@ -420,5 +378,6 @@ static void ConfigureMiddlewarePipeline(WebApplication app)
     app.UseAuthorization();
     app.UseRoleAuthorization();
     app.MapControllers();
-    Console.WriteLine("Middleware pipeline configured successfully with optimizations");
+
+    Console.WriteLine("Middleware pipeline configured successfully.");
 }

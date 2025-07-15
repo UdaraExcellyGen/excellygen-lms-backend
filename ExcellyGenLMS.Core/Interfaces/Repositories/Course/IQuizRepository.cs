@@ -1,4 +1,3 @@
-// ExcellyGenLMS.Core/Interfaces/Repositories/Course/IQuizRepository.cs
 using ExcellyGenLMS.Core.Entities.Course;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -10,6 +9,7 @@ namespace ExcellyGenLMS.Core.Interfaces.Repositories.Course
         // Quiz operations
         Task<Quiz?> GetQuizByIdAsync(int quizId);
         Task<IEnumerable<Quiz>> GetQuizzesByLessonIdAsync(int lessonId);
+        Task<IEnumerable<Quiz>> GetQuizzesByCourseIdAsync(int courseId); // This method is needed
         Task<Quiz?> GetQuizByLessonIdAsync(int lessonId);
         Task<IEnumerable<Quiz>> GetQuizzesByLessonIdsAsync(List<int> lessonIds);
         Task<Quiz> CreateQuizAsync(Quiz quiz);
@@ -37,8 +37,6 @@ namespace ExcellyGenLMS.Core.Interfaces.Repositories.Course
         Task AddOptionToQuestionAsync(MCQQuestionOption option);
         Task UpdateOptionAsync(MCQQuestionOption option);
         Task DeleteOptionAsync(int optionId);
-
-        // NEW: Added this method to check if an option is used in any quiz attempts
         Task<bool> IsOptionUsedInAttemptsAsync(int optionId);
     }
 }

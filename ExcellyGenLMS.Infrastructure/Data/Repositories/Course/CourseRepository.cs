@@ -1,4 +1,3 @@
-// ExcellyGenLMS.Infrastructure/Data/Repositories/Course/CourseRepository.cs
 using ExcellyGenLMS.Core.Entities.Course;
 using ExcellyGenLMS.Core.Interfaces.Repositories.Course;
 using Microsoft.EntityFrameworkCore;
@@ -7,7 +6,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using ExcellyGenLMS.Core.Enums;
-using ExcellyGenLMS.Infrastructure.Data;
 
 namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
 {
@@ -30,11 +28,9 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
             return await _context.Courses
                 .Include(c => c.Category)
                 .Include(c => c.Creator)
-                .Include(c => c.CourseTechnologies)
-                    .ThenInclude(ct => ct.Technology)
-                .Include(c => c.Lessons)
-                    .ThenInclude(l => l.Documents)
-                .AsSplitQuery() // OPTIMIZATION: Use split query for multiple includes
+                .Include(c => c.CourseTechnologies).ThenInclude(ct => ct.Technology)
+                .Include(c => c.Lessons).ThenInclude(l => l.Documents)
+                .AsSplitQuery()
                 .FirstOrDefaultAsync(c => c.Id == id);
         }
 
@@ -43,8 +39,7 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
             return await _context.Courses
                 .Include(c => c.Category)
                 .Include(c => c.Creator)
-                .Include(c => c.CourseTechnologies)
-                    .ThenInclude(ct => ct.Technology)
+                .Include(c => c.CourseTechnologies).ThenInclude(ct => ct.Technology)
                 .AsNoTracking()
                 .OrderBy(c => c.Title)
                 .ToListAsync();
@@ -56,11 +51,9 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
                 .Where(c => c.Status == CourseStatus.Published && !c.IsInactive)
                 .Include(c => c.Category)
                 .Include(c => c.Creator)
-                .Include(c => c.CourseTechnologies)
-                    .ThenInclude(ct => ct.Technology)
-                .Include(c => c.Lessons)
-                    .ThenInclude(l => l.Documents)
-                .AsSplitQuery() // OPTIMIZATION: Use split query for better performance
+                .Include(c => c.CourseTechnologies).ThenInclude(ct => ct.Technology)
+                .Include(c => c.Lessons).ThenInclude(l => l.Documents)
+                .AsSplitQuery()
                 .AsNoTracking()
                 .OrderBy(c => c.Title)
                 .ToListAsync();
@@ -73,6 +66,15 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
                 .Include(l => l.Documents)
                 .AsNoTracking()
                 .OrderBy(l => l.Id)
+                .ToListAsync();
+        }
+
+        public async Task<IEnumerable<Lesson>> GetLessonsByCourseIdsAsync(List<int> courseIds)
+        {
+            return await _context.Lessons
+                .Where(l => courseIds.Contains(l.CourseId))
+                .Include(l => l.Documents)
+                .AsNoTracking()
                 .ToListAsync();
         }
 

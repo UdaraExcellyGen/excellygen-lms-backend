@@ -1,4 +1,3 @@
-// ExcellyGenLMS.Infrastructure/Data/Repositories/Course/QuizAttemptRepository.cs
 using ExcellyGenLMS.Core.Entities.Course;
 using ExcellyGenLMS.Core.Interfaces.Repositories.Course;
 using ExcellyGenLMS.Infrastructure.Data;
@@ -26,7 +25,7 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
                                  .Include(qa => qa.User)
                                  .Include(qa => qa.Answers)
                                      .ThenInclude(a => a.Question)
-                                         .ThenInclude(q => q!.MCQQuestionOptions)
+                                         .ThenInclude(q => q!.MCQQuestionOptions) // Safe: We filter for non-null questions
                                  .Include(qa => qa.Answers)
                                      .ThenInclude(a => a.SelectedOption)
                                  .FirstOrDefaultAsync(qa => qa.QuizAttemptId == attemptId);
@@ -63,8 +62,6 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
         {
             _context.QuizAttempts.Add(attempt);
             await _context.SaveChangesAsync();
-
-            // Return the attempt with loaded navigation properties
             return await GetQuizAttemptByIdAsync(attempt.QuizAttemptId) ?? attempt;
         }
 
@@ -84,12 +81,34 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
             }
         }
 
-        // Answer operations
+        public async Task<IEnumerable<QuizAttempt>> GetCompletedAttemptsByUserAndQuizAsync(string userId, int quizId)
+        {
+            return await _context.QuizAttempts
+                .Where(qa => qa.UserId == userId &&
+                             qa.QuizId == quizId &&
+                             qa.IsCompleted == true)
+                .ToListAsync();
+        }
+
+        public async Task<IEnumerable<QuizAttempt>> GetCompletedAttemptsByUserAndQuizzesAsync(string userId, List<int> quizIds)
+        {
+            if (quizIds == null || !quizIds.Any())
+            {
+                return new List<QuizAttempt>();
+            }
+
+            return await _context.QuizAttempts
+                .Where(qa => qa.UserId == userId &&
+                             quizIds.Contains(qa.QuizId) &&
+                             qa.IsCompleted == true)
+                .ToListAsync();
+        }
+
         public async Task<QuizAttemptAnswer?> GetAnswerByAttemptAndQuestionAsync(int attemptId, int questionId)
         {
             return await _context.QuizAttemptAnswers
                                  .Include(qaa => qaa.SelectedOption)
-                                 .Include(qaa => qaa.Question)
+                                 .Include(qaa => qaa.Question)!
                                      .ThenInclude(q => q!.MCQQuestionOptions)
                                  .FirstOrDefaultAsync(qaa => qaa.QuizAttemptId == attemptId && qaa.QuizBankQuestionId == questionId);
         }
@@ -97,10 +116,10 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
         public async Task<IEnumerable<QuizAttemptAnswer>> GetAnswersByAttemptIdAsync(int attemptId)
         {
             return await _context.QuizAttemptAnswers
-                                 .Include(qaa => qaa.Question)
+                                 .Include(qaa => qaa.Question)!
                                      .ThenInclude(q => q!.MCQQuestionOptions)
                                  .Include(qaa => qaa.SelectedOption)
-                                 .Where(qaa => qaa.QuizAttemptId == attemptId)
+                                 .Where(qaa => qaa.QuizAttemptId == attemptId && qaa.Question != null)
                                  .OrderBy(qaa => qaa.Question!.QuestionBankOrder)
                                  .ToListAsync();
         }
@@ -116,15 +135,6 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
         {
             _context.Entry(answer).State = EntityState.Modified;
             await _context.SaveChangesAsync();
-        }
-
-        public async Task<IEnumerable<QuizAttempt>> GetCompletedAttemptsByUserAndQuizAsync(string userId, int quizId)
-        {
-            return await _context.QuizAttempts
-                .Where(qa => qa.UserId == userId &&
-                             qa.QuizId == quizId &&
-                             qa.IsCompleted == true)
-                .ToListAsync();
         }
 
         public async Task DeleteQuizAttemptAnswerAsync(int answerId)

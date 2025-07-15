@@ -1,3 +1,5 @@
+// Path: ExcellyGenLMS.Infrastructure/Data/Repositories/Learner/UserTechnologyRepository.cs
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -86,6 +88,71 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Learner
 
             _context.UserTechnologies.Remove(userTechnology);
             await _context.SaveChangesAsync();
+        }
+
+        // NEW OPTIMIZED METHOD: Bulk load skills for multiple users to fix N+1 query problem
+        public async Task<Dictionary<string, List<string>>> GetSkillsForMultipleUsersAsync(List<string> userIds)
+        {
+            try
+            {
+                if (userIds == null || !userIds.Any())
+                {
+                    return new Dictionary<string, List<string>>();
+                }
+
+                _logger.LogInformation($"Loading skills for {userIds.Count} users in bulk");
+
+                var userTechnologies = await _context.UserTechnologies
+                    .Include(ut => ut.Technology)
+                    .Where(ut => userIds.Contains(ut.UserId))
+                    .Select(ut => new { ut.UserId, TechnologyName = ut.Technology!.Name })
+                    .ToListAsync();
+
+                var skillsDict = userIds.ToDictionary(
+                    userId => userId,
+                    userId => userTechnologies
+                        .Where(ut => ut.UserId == userId)
+                        .Select(ut => ut.TechnologyName)
+                        .ToList()
+                );
+
+                _logger.LogInformation($"Loaded skills for {skillsDict.Keys.Count} users with {userTechnologies.Count} total skills");
+                return skillsDict;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error loading skills for multiple users: {string.Join(", ", userIds ?? new List<string>())}");
+                // Return empty dictionary instead of throwing to prevent breaking the employee loading
+                return userIds?.ToDictionary(id => id, id => new List<string>()) ?? new Dictionary<string, List<string>>();
+            }
+        }
+
+        // NEW METHOD: Get user technologies count for multiple users (for statistics)
+        public async Task<Dictionary<string, int>> GetTechnologyCountForMultipleUsersAsync(List<string> userIds)
+        {
+            try
+            {
+                if (userIds == null || !userIds.Any())
+                {
+                    return new Dictionary<string, int>();
+                }
+
+                var counts = await _context.UserTechnologies
+                    .Where(ut => userIds.Contains(ut.UserId))
+                    .GroupBy(ut => ut.UserId)
+                    .Select(g => new { UserId = g.Key, Count = g.Count() })
+                    .ToListAsync();
+
+                return userIds.ToDictionary(
+                    userId => userId,
+                    userId => counts.FirstOrDefault(c => c.UserId == userId)?.Count ?? 0
+                );
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, $"Error getting technology counts for users: {string.Join(", ", userIds ?? new List<string>())}");
+                return userIds?.ToDictionary(id => id, id => 0) ?? new Dictionary<string, int>();
+            }
         }
     }
 }

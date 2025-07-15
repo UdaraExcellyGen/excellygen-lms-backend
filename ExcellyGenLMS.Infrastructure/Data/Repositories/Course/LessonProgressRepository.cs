@@ -1,4 +1,3 @@
-// ExcellyGenLMS.Infrastructure/Data/Repositories/Course/LessonProgressRepository.cs
 using ExcellyGenLMS.Core.Entities.Course;
 using ExcellyGenLMS.Core.Interfaces.Repositories.Course;
 using Microsoft.EntityFrameworkCore;
@@ -34,9 +33,17 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
         public async Task<IEnumerable<LessonProgress>> GetProgressByUserIdAndCourseIdAsync(string userId, int courseId)
         {
             return await _context.LessonProgress
-                                 .Where(lp => lp.UserId == userId && lp.Lesson.CourseId == courseId)
+                                 .Where(lp => lp.UserId == userId && lp.Lesson != null && lp.Lesson.CourseId == courseId)
                                  .Include(lp => lp.Lesson)
                                  .ToListAsync();
+        }
+
+        public async Task<IEnumerable<LessonProgress>> GetProgressByUserIdAndCourseIdsAsync(string userId, List<int> courseIds)
+        {
+            return await _context.LessonProgress
+                .Where(lp => lp.UserId == userId && lp.Lesson != null && courseIds.Contains(lp.Lesson.CourseId))
+                .Include(lp => lp.Lesson)
+                .ToListAsync();
         }
 
         public async Task<LessonProgress> AddAsync(LessonProgress progress)

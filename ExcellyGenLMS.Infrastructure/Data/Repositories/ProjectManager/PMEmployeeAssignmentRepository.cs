@@ -58,7 +58,7 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.ProjectManager
         {
             _context.PMEmployeeAssignments.Add(assignment);
             await _context.SaveChangesAsync();
-            
+
             // Return the assignment with included relationships
             return await GetByIdAsync(assignment.Id) ?? assignment;
         }
@@ -67,7 +67,7 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.ProjectManager
         {
             _context.PMEmployeeAssignments.AddRange(assignments);
             await _context.SaveChangesAsync();
-            
+
             // Return assignments with included relationships
             var assignmentIds = assignments.Select(a => a.Id).ToList();
             return await _context.PMEmployeeAssignments
@@ -130,8 +130,8 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.ProjectManager
         public async Task<bool> HasDuplicateAssignmentAsync(string projectId, string employeeId, string role)
         {
             return await _context.PMEmployeeAssignments
-                .AnyAsync(a => a.ProjectId == projectId && 
-                              a.EmployeeId == employeeId && 
+                .AnyAsync(a => a.ProjectId == projectId &&
+                              a.EmployeeId == employeeId &&
                               a.Role == role);
         }
 
@@ -140,7 +140,7 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.ProjectManager
             return await _context.PMEmployeeAssignments
                 .Include(a => a.Project)
                 .Include(a => a.Employee)
-                .Where(a => a.EmployeeId == employeeId && a.Project.Status == "Active")
+                .Where(a => a.EmployeeId == employeeId && a.Project!.Status == "Active")
                 .ToListAsync();
         }
 
@@ -148,6 +148,123 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.ProjectManager
         {
             return await _context.PMEmployeeAssignments
                 .AnyAsync(a => a.ProjectId == projectId && a.EmployeeId == employeeId);
+        }
+
+        // NEW OPTIMIZED METHODS: Bulk operations to reduce database calls
+
+        /// <summary>
+        /// Get current workload for multiple employees in a single query
+        /// </summary>
+        public async Task<Dictionary<string, int>> GetEmployeesCurrentWorkloadAsync(List<string> employeeIds)
+        {
+            if (employeeIds == null || !employeeIds.Any())
+            {
+                return new Dictionary<string, int>();
+            }
+
+            var workloads = await _context.PMEmployeeAssignments
+                .Where(a => employeeIds.Contains(a.EmployeeId))
+                .GroupBy(a => a.EmployeeId)
+                .Select(g => new { EmployeeId = g.Key, TotalWorkload = g.Sum(a => a.WorkloadPercentage) })
+                .ToListAsync();
+
+            // Ensure all requested employees are in the result, even if they have 0 workload
+            return employeeIds.ToDictionary(
+                empId => empId,
+                empId => workloads.FirstOrDefault(w => w.EmployeeId == empId)?.TotalWorkload ?? 0
+            );
+        }
+
+        /// <summary>
+        /// Get assignments with projects for multiple employees in a single query
+        /// </summary>
+        public async Task<Dictionary<string, List<PMEmployeeAssignment>>> GetEmployeesAssignmentsWithProjectsAsync(List<string> employeeIds)
+        {
+            if (employeeIds == null || !employeeIds.Any())
+            {
+                return new Dictionary<string, List<PMEmployeeAssignment>>();
+            }
+
+            var assignments = await _context.PMEmployeeAssignments
+                .Include(a => a.Project)
+                .Include(a => a.Employee)
+                .Where(a => employeeIds.Contains(a.EmployeeId) && a.Project!.Status == "Active")
+                .ToListAsync();
+
+            return employeeIds.ToDictionary(
+                empId => empId,
+                empId => assignments.Where(a => a.EmployeeId == empId).ToList()
+            );
+        }
+
+        /// <summary>
+        /// Get active project names for multiple employees
+        /// </summary>
+        public async Task<Dictionary<string, List<string>>> GetEmployeesActiveProjectNamesAsync(List<string> employeeIds)
+        {
+            if (employeeIds == null || !employeeIds.Any())
+            {
+                return new Dictionary<string, List<string>>();
+            }
+
+            var projectAssignments = await _context.PMEmployeeAssignments
+                .Include(a => a.Project)
+                .Where(a => employeeIds.Contains(a.EmployeeId) && a.Project!.Status == "Active")
+                .Select(a => new { a.EmployeeId, ProjectName = a.Project!.Name })
+                .ToListAsync();
+
+            return employeeIds.ToDictionary(
+                empId => empId,
+                empId => projectAssignments
+                    .Where(pa => pa.EmployeeId == empId)
+                    .Select(pa => pa.ProjectName)
+                    .Distinct()
+                    .ToList()
+            );
+        }
+
+        /// <summary>
+        /// Check if multiple employees are assigned to specific projects
+        /// </summary>
+        public async Task<Dictionary<string, bool>> AreEmployeesAssignedToProjectAsync(string projectId, List<string> employeeIds)
+        {
+            if (employeeIds == null || !employeeIds.Any())
+            {
+                return new Dictionary<string, bool>();
+            }
+
+            var assignedEmployees = await _context.PMEmployeeAssignments
+                .Where(a => a.ProjectId == projectId && employeeIds.Contains(a.EmployeeId))
+                .Select(a => a.EmployeeId)
+                .Distinct()
+                .ToListAsync();
+
+            return employeeIds.ToDictionary(
+                empId => empId,
+                empId => assignedEmployees.Contains(empId)
+            );
+        }
+
+        /// <summary>
+        /// Get assignment counts by project for analytics
+        /// </summary>
+        public async Task<Dictionary<string, int>> GetProjectAssignmentCountsAsync(List<string> projectIds)
+        {
+            if (projectIds == null || !projectIds.Any())
+            {
+                return new Dictionary<string, int>();
+            }
+
+            var counts = await _context.PMEmployeeAssignments
+                .Where(a => projectIds.Contains(a.ProjectId))
+                .GroupBy(a => a.ProjectId)
+                .Select(g => new { ProjectId = g.Key, Count = g.Count() })
+                .ToListAsync();
+
+            return projectIds.ToDictionary(
+                projId => projId,
+                projId => counts.FirstOrDefault(c => c.ProjectId == projId)?.Count ?? 0
+            );
         }
     }
 }

@@ -1,4 +1,3 @@
-// ExcellyGenLMS.Core/Entities/Course/Enrollment.cs
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -25,7 +24,11 @@ namespace ExcellyGenLMS.Core.Entities.Course
         public DateTime EnrollmentDate { get; set; } = DateTime.UtcNow;
 
         [Column("status")]
-        public string Status { get; set; } = "active"; // active, completed, withdrawn
+        public string Status { get; set; } = "active";
+
+        // THIS IS THE CRITICAL FIX
+        [Column("completion_date")]
+        public DateTime? CompletionDate { get; set; }
 
         // Navigation properties
         [ForeignKey("UserId")]

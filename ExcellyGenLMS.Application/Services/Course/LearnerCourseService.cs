@@ -17,10 +17,8 @@ namespace ExcellyGenLMS.Application.Services.Course
         private readonly IEnrollmentRepository _enrollmentRepository;
         private readonly ILessonProgressRepository _lessonProgressRepository;
         private readonly IQuizService _quizService;
-        private readonly IQuizAttemptService _quizAttemptService;
         private readonly IFileStorageService _fileStorageService;
         private readonly ILogger<LearnerCourseService> _logger;
-        // ADDED: Repository to get full attempt details
         private readonly IQuizAttemptRepository _quizAttemptRepository;
 
         public LearnerCourseService(
@@ -28,153 +26,18 @@ namespace ExcellyGenLMS.Application.Services.Course
             IEnrollmentRepository enrollmentRepository,
             ILessonProgressRepository lessonProgressRepository,
             IQuizService quizService,
-            IQuizAttemptService quizAttemptService,
             IFileStorageService fileStorageService,
             ILogger<LearnerCourseService> logger,
-            IQuizAttemptRepository quizAttemptRepository) // MODIFIED: Inject repository
+            IQuizAttemptRepository quizAttemptRepository)
         {
             _courseRepository = courseRepository;
             _enrollmentRepository = enrollmentRepository;
             _lessonProgressRepository = lessonProgressRepository;
             _quizService = quizService;
-            _quizAttemptService = quizAttemptService;
             _fileStorageService = fileStorageService;
             _logger = logger;
-            _quizAttemptRepository = quizAttemptRepository; // MODIFIED: Assign repository
+            _quizAttemptRepository = quizAttemptRepository;
         }
-
-        private LearnerCourseDto MapCourseToLightweightDto(Core.Entities.Course.Course course, bool isEnrolled, Enrollment? enrollment = null)
-        {
-            // This method remains unchanged.
-            return new LearnerCourseDto
-            {
-                Id = course.Id,
-                Title = course.Title,
-                Description = course.Description,
-                EstimatedTime = course.EstimatedTime,
-                IsInactive = course.IsInactive, // <-- ADD THIS LINE
-                ThumbnailUrl = course.ThumbnailImagePath != null ? _fileStorageService.GetFileUrl(course.ThumbnailImagePath) : string.Empty,
-                Category = course.Category != null
-                    ? new CategoryDto { Id = course.Category.Id, Title = course.Category.Title }
-                    : new CategoryDto { Id = "uncategorized", Title = "Uncategorized" },
-                Technologies = course.CourseTechnologies?
-                    .Where(ct => ct.Technology != null)
-                    .Select(ct => new TechnologyDto { Id = ct.Technology.Id, Name = ct.Technology.Name })
-                    .ToList() ?? new List<TechnologyDto>(),
-                Status = course.Status,
-                IsEnrolled = isEnrolled,
-                EnrollmentDate = enrollment?.EnrollmentDate,
-                EnrollmentStatus = enrollment?.Status ?? "not_enrolled",
-                EnrollmentId = enrollment?.Id,
-                ProgressPercentage = 0,
-                TotalLessons = 0,
-                CompletedLessons = 0,
-                Lessons = new List<LearnerLessonDto>()
-            };
-        }
-
-        private async Task<LearnerCourseDto> MapCourseToDetailedDto(Core.Entities.Course.Course course, string userId, Enrollment? enrollment = null)
-        {
-            var courseId = course.Id;
-
-            var lessons = (await _courseRepository.GetLessonsByCourseIdAsync(courseId)).ToList();
-            var progresses = (await _lessonProgressRepository.GetProgressByUserIdAndCourseIdAsync(userId, courseId)).ToList();
-            var quizDtos = (await _quizService.GetQuizzesByCourseIdAsync(courseId)).ToList();
-            var quizByLessonId = quizDtos.ToDictionary(q => q.LessonId, q => q);
-
-            // --- START OF CRITICAL FIX ---
-            // Instead of just getting a boolean, we now get the full attempt object to find its ID.
-            var lastAttemptLookup = new Dictionary<int, QuizAttempt>();
-            var quizIds = quizDtos.Select(q => q.QuizId).ToList();
-
-            // Loop sequentially to avoid DbContext concurrency issues
-            foreach (var quizId in quizIds)
-            {
-                var completedAttempts = await _quizAttemptRepository.GetCompletedAttemptsByUserAndQuizAsync(userId, quizId);
-                // Find the most recent completed attempt
-                var lastCompletedAttempt = completedAttempts.OrderByDescending(a => a.CompletionTime).FirstOrDefault();
-                if (lastCompletedAttempt != null)
-                {
-                    lastAttemptLookup[quizId] = lastCompletedAttempt;
-                }
-            }
-            // --- END OF CRITICAL FIX ---
-
-            var learnerLessons = new List<LearnerLessonDto>();
-            foreach (var lesson in lessons.OrderBy(l => l.Id))
-            {
-                var progress = progresses.FirstOrDefault(lp => lp.LessonId == lesson.Id);
-                var hasQuiz = quizByLessonId.TryGetValue(lesson.Id, out var quizDto);
-
-                // --- MODIFIED LOGIC TO POPULATE DTO ---
-                bool isQuizCompleted = false;
-                int? lastAttemptId = null;
-
-                if (hasQuiz && quizDto != null)
-                {
-                    if (lastAttemptLookup.TryGetValue(quizDto.QuizId, out var lastAttempt))
-                    {
-                        isQuizCompleted = true;
-                        lastAttemptId = lastAttempt.QuizAttemptId; // Assign the ID
-                    }
-                }
-
-                learnerLessons.Add(new LearnerLessonDto
-                {
-                    Id = lesson.Id,
-                    LessonName = lesson.LessonName,
-                    LessonPoints = lesson.LessonPoints,
-                    LastUpdatedDate = lesson.LastUpdatedDate,
-                    Documents = lesson.Documents?.Select(d => new CourseDocumentDto
-                    {
-                        Id = d.Id,
-                        Name = d.Name,
-                        DocumentType = d.DocumentType,
-                        FileSize = d.FileSize,
-                        FileUrl = d.FilePath != null ? _fileStorageService.GetFileUrl(d.FilePath) : string.Empty,
-                        LastUpdatedDate = d.LastUpdatedDate,
-                        LessonId = d.LessonId
-                    }).ToList() ?? new List<CourseDocumentDto>(),
-                    IsCompleted = progress?.IsCompleted ?? false,
-                    HasQuiz = hasQuiz,
-                    QuizId = quizDto?.QuizId,
-                    IsQuizCompleted = isQuizCompleted, // Set the flag
-                    LastAttemptId = lastAttemptId      // SET THE ID
-                });
-            }
-
-            int completedLessonsCount = learnerLessons.Count(l => l.IsCompleted && (!l.HasQuiz || l.IsQuizCompleted));
-            int totalContentItems = learnerLessons.Count;
-            int progressPercentage = totalContentItems > 0 ? (int)Math.Round((double)completedLessonsCount / totalContentItems * 100) : 0;
-
-            return new LearnerCourseDto
-            {
-                Id = course.Id,
-                Title = course.Title,
-                Description = course.Description,
-                EstimatedTime = course.EstimatedTime,
-                IsInactive = course.IsInactive,
-                ThumbnailUrl = course.ThumbnailImagePath != null ? _fileStorageService.GetFileUrl(course.ThumbnailImagePath) : string.Empty,
-                Category = course.Category != null
-                    ? new CategoryDto { Id = course.Category.Id, Title = course.Category.Title }
-                    : new CategoryDto { Id = "uncategorized", Title = "Uncategorized" },
-                Technologies = course.CourseTechnologies?
-                    .Where(ct => ct.Technology != null)
-                    .Select(ct => new TechnologyDto { Id = ct.Technology.Id, Name = ct.Technology.Name })
-                    .ToList() ?? new List<TechnologyDto>(),
-                Status = course.Status,
-                IsEnrolled = enrollment != null,
-                EnrollmentDate = enrollment?.EnrollmentDate,
-                EnrollmentStatus = enrollment?.Status ?? "not_enrolled",
-                ProgressPercentage = progressPercentage,
-                TotalLessons = totalContentItems,
-                CompletedLessons = completedLessonsCount,
-                Lessons = learnerLessons,
-                EnrollmentId = enrollment?.Id
-            };
-        }
-
-        // --- Other methods in the service remain unchanged ---
 
         public async Task<IEnumerable<LearnerCourseDto>> GetAvailableCoursesAsync(string userId, string? categoryId = null)
         {
@@ -194,80 +57,139 @@ namespace ExcellyGenLMS.Application.Services.Course
 
         public async Task<IEnumerable<LearnerCourseDto>> GetEnrolledCoursesAsync(string userId)
         {
-            _logger.LogInformation("Getting enrolled courses for user {UserId}", userId);
-            var enrollments = await _enrollmentRepository.GetEnrollmentsByUserIdAsync(userId);
-            if (!enrollments.Any())
+            try
             {
-                _logger.LogInformation("No enrolled courses found for user {UserId}.", userId);
-                return new List<LearnerCourseDto>();
+                _logger.LogInformation("Getting enrolled courses for user {UserId}", userId);
+                var enrollments = (await _enrollmentRepository.GetEnrollmentsByUserIdAsync(userId)).ToList();
+                if (!enrollments.Any()) return new List<LearnerCourseDto>();
+
+                var enrolledCourseIds = enrollments.Select(e => e.CourseId).ToList();
+
+                var allLessons = (await _courseRepository.GetLessonsByCourseIdsAsync(enrolledCourseIds)).ToLookup(l => l.CourseId);
+                var allProgresses = (await _lessonProgressRepository.GetProgressByUserIdAndCourseIdsAsync(userId, enrolledCourseIds)).ToDictionary(p => p.LessonId);
+                var allQuizzes = (await _quizService.GetQuizzesByCourseIdsAsync(enrolledCourseIds)).ToLookup(q => q.LessonId);
+
+                var allQuizIds = allQuizzes.SelectMany(q => q).Select(q => q.QuizId).ToList();
+                var lastAttemptByQuizId = (await _quizAttemptRepository.GetCompletedAttemptsByUserAndQuizzesAsync(userId, allQuizIds))
+                                          .GroupBy(a => a.QuizId)
+                                          .ToDictionary(g => g.Key, g => g.OrderByDescending(a => a.CompletionTime).First());
+
+                var enrolledCourses = new List<LearnerCourseDto>();
+                foreach (var enrollment in enrollments)
+                {
+                    if (enrollment.Course == null)
+                    {
+                        _logger.LogWarning("Skipping enrollment ID {EnrollmentId} because its associated course is null.", enrollment.Id);
+                        continue;
+                    }
+
+                    var course = enrollment.Course;
+                    var courseLessons = allLessons[course.Id].ToList();
+                    var learnerLessons = courseLessons.Select(lesson =>
+                    {
+                        allProgresses.TryGetValue(lesson.Id, out var progress);
+                        var quizForLesson = allQuizzes[lesson.Id].FirstOrDefault();
+                        lastAttemptByQuizId.TryGetValue(quizForLesson?.QuizId ?? 0, out var lastAttempt);
+
+                        return new LearnerLessonDto
+                        {
+                            Id = lesson.Id,
+                            LessonName = lesson.LessonName,
+                            LessonPoints = lesson.LessonPoints,
+                            IsCompleted = progress?.IsCompleted ?? false,
+                            HasQuiz = quizForLesson != null,
+                            QuizId = quizForLesson?.QuizId,
+                            IsQuizCompleted = lastAttempt != null,
+                            LastAttemptId = lastAttempt?.QuizAttemptId,
+                            Documents = lesson.Documents?.Select(d => new CourseDocumentDto
+                            {
+                                Id = d.Id,
+                                Name = d.Name,
+                                DocumentType = d.DocumentType,
+                                FileSize = d.FileSize,
+                                FileUrl = d.FilePath != null ? _fileStorageService.GetFileUrl(d.FilePath) : string.Empty,
+                                LastUpdatedDate = d.LastUpdatedDate,
+                                LessonId = d.LessonId
+                            }).ToList() ?? new List<CourseDocumentDto>()
+                        };
+                    }).ToList();
+
+                    int completedLessonsCount = learnerLessons.Count(l => l.IsCompleted);
+                    int totalLessonsCount = learnerLessons.Count;
+                    int progressPercentage = totalLessonsCount > 0 ? (int)Math.Round((double)completedLessonsCount / totalLessonsCount * 100) : 0;
+
+                    enrolledCourses.Add(new LearnerCourseDto
+                    {
+                        Id = course.Id,
+                        Title = course.Title,
+                        Description = course.Description,
+                        EstimatedTime = course.EstimatedTime,
+                        IsInactive = course.IsInactive,
+                        ThumbnailUrl = course.ThumbnailImagePath != null ? _fileStorageService.GetFileUrl(course.ThumbnailImagePath) : string.Empty,
+                        Category = course.Category != null
+                            ? new CategoryDto { Id = course.Category.Id, Title = course.Category.Title }
+                            : new CategoryDto { Id = "uncategorized", Title = "Uncategorized" },
+                        Technologies = course.CourseTechnologies?
+                            .Where(ct => ct.Technology != null)
+                            .Select(ct => new TechnologyDto { Id = ct.Technology.Id, Name = ct.Technology.Name })
+                            .ToList() ?? new List<TechnologyDto>(),
+                        Status = course.Status,
+                        IsEnrolled = true,
+                        EnrollmentDate = enrollment.EnrollmentDate,
+                        EnrollmentStatus = enrollment.Status,
+                        EnrollmentId = enrollment.Id,
+                        ProgressPercentage = progressPercentage,
+                        TotalLessons = totalLessonsCount,
+                        CompletedLessons = completedLessonsCount,
+                        Lessons = learnerLessons
+                    });
+                }
+                return enrolledCourses;
             }
-            var enrolledCourses = new List<LearnerCourseDto>();
-            foreach (var enrollment in enrollments)
+            catch (Exception ex)
             {
-                if (enrollment.Course != null)
-                {
-                    var courseDto = MapCourseToLightweightDto(enrollment.Course, true, enrollment);
-                    enrolledCourses.Add(courseDto);
-                }
-                else
-                {
-                    _logger.LogWarning("Enrollment record with ID {EnrollmentId} exists for user {UserId} but has a null Course.", enrollment.Id, userId);
-                }
+                _logger.LogError(ex, "An error occurred while retrieving enrolled courses for user {UserId}", userId);
+                throw; // Rethrowing the exception will result in a 500 error on the client, which is appropriate.
             }
-            _logger.LogInformation("Found {Count} enrolled courses for user {UserId}.", enrolledCourses.Count, userId);
-            return enrolledCourses;
         }
 
         public async Task<LearnerCourseDto?> GetLearnerCourseDetailsAsync(string userId, int courseId)
         {
-            _logger.LogInformation("Getting learner course details for user {UserId} and course {CourseId}", userId, courseId);
-            var course = await _courseRepository.GetByIdWithDetailsAsync(courseId);
-            if (course == null)
-            {
-                _logger.LogWarning("Course {CourseId} not found.", courseId);
-                return null;
-            }
-            var enrollment = await _enrollmentRepository.GetEnrollmentByUserIdAndCourseIdAsync(userId, courseId);
-            return await MapCourseToDetailedDto(course, userId, enrollment);
+            // This implementation now works correctly with the detailed GetEnrolledCoursesAsync method above.
+            var enrolledCourses = await GetEnrolledCoursesAsync(userId);
+            return enrolledCourses.FirstOrDefault(c => c.Id == courseId);
         }
 
         public async Task<LessonProgressDto> MarkLessonCompletedAsync(string userId, int lessonId)
         {
-            _logger.LogInformation("Attempting to mark lesson {LessonId} as completed for user {UserId}", lessonId, userId);
-            var lesson = await _courseRepository.GetLessonWithDocumentsAsync(lessonId);
-            if (lesson == null)
-            {
-                throw new KeyNotFoundException($"Lesson with ID {lessonId} not found.");
-            }
+            var lesson = await _courseRepository.GetLessonWithDocumentsAsync(lessonId) ?? throw new KeyNotFoundException($"Lesson with ID {lessonId} not found.");
+            var enrollment = await _enrollmentRepository.GetEnrollmentByUserIdAndCourseIdAsync(userId, lesson.CourseId) ?? throw new InvalidOperationException($"User not enrolled in course {lesson.CourseId}.");
+
             var progress = await _lessonProgressRepository.GetProgressByUserIdAndLessonIdAsync(userId, lessonId);
-            var enrollment = await _enrollmentRepository.GetEnrollmentByUserIdAndCourseIdAsync(userId, lesson.CourseId);
-            if (enrollment == null)
-            {
-                throw new InvalidOperationException($"User {userId} is not enrolled in the course ({lesson.CourseId}) for lesson {lessonId}.");
-            }
             if (progress == null)
             {
-                progress = new LessonProgress
-                {
-                    UserId = userId,
-                    LessonId = lessonId,
-                    IsCompleted = true,
-                    CompletionDate = DateTime.UtcNow
-                };
+                progress = new LessonProgress { UserId = userId, LessonId = lessonId, IsCompleted = true, CompletionDate = DateTime.UtcNow };
                 await _lessonProgressRepository.AddAsync(progress);
-                _logger.LogInformation("Created new progress record for lesson {LessonId} for user {UserId}.", lessonId, userId);
             }
             else if (!progress.IsCompleted)
             {
                 progress.IsCompleted = true;
                 progress.CompletionDate = DateTime.UtcNow;
                 await _lessonProgressRepository.UpdateAsync(progress);
-                _logger.LogInformation("Updated progress record for lesson {LessonId} for user {UserId}.", lessonId, userId);
             }
-            else
+
+            var lessonsInCourse = await _courseRepository.GetLessonsByCourseIdAsync(lesson.CourseId);
+            var completedLessonsForCourse = await _lessonProgressRepository.GetProgressByUserIdAndCourseIdAsync(userId, lesson.CourseId);
+
+            if (lessonsInCourse.Any() && completedLessonsForCourse.Count() >= lessonsInCourse.Count())
             {
-                _logger.LogInformation("Lesson {LessonId} already marked as completed for user {UserId}.", lessonId, userId);
+                if (enrollment.Status != "completed")
+                {
+                    enrollment.Status = "completed";
+                    await _enrollmentRepository.UpdateEnrollmentAsync(enrollment);
+                }
             }
+
             return new LessonProgressDto
             {
                 Id = progress.Id,
@@ -281,15 +203,34 @@ namespace ExcellyGenLMS.Application.Services.Course
 
         public async Task<bool> HasLearnerCompletedAllCourseContentAsync(string userId, int courseId)
         {
-            // This method could also be updated to use the new logic, but the current fix is in MapCourseToDetailedDto
-            _logger.LogInformation("Checking if user {UserId} has completed all content for course {CourseId}", userId, courseId);
-            var course = await _courseRepository.GetByIdWithDetailsAsync(courseId);
-            if (course == null)
+            var enrollment = await _enrollmentRepository.GetEnrollmentByUserIdAndCourseIdAsync(userId, courseId);
+            return enrollment?.Status == "completed";
+        }
+
+        private LearnerCourseDto MapCourseToLightweightDto(Core.Entities.Course.Course course, bool isEnrolled, Enrollment? enrollment = null)
+        {
+            return new LearnerCourseDto
             {
-                throw new KeyNotFoundException($"Course with ID {courseId} not found.");
-            }
-            var detailedDto = await MapCourseToDetailedDto(course, userId);
-            return detailedDto.ProgressPercentage >= 100;
+                Id = course.Id,
+                Title = course.Title,
+                Description = course.Description,
+                EstimatedTime = course.EstimatedTime,
+                IsInactive = course.IsInactive,
+                ThumbnailUrl = course.ThumbnailImagePath != null ? _fileStorageService.GetFileUrl(course.ThumbnailImagePath) : string.Empty,
+                Category = course.Category != null
+                    ? new CategoryDto { Id = course.Category.Id, Title = course.Category.Title }
+                    : new CategoryDto { Id = "uncategorized", Title = "Uncategorized" },
+                Technologies = course.CourseTechnologies?
+                    .Where(ct => ct.Technology != null)
+                    .Select(ct => new TechnologyDto { Id = ct.Technology.Id, Name = ct.Technology.Name })
+                    .ToList() ?? new List<TechnologyDto>(),
+                Status = course.Status,
+                IsEnrolled = isEnrolled,
+                EnrollmentDate = enrollment?.EnrollmentDate,
+                EnrollmentStatus = enrollment?.Status ?? "not_enrolled",
+                EnrollmentId = enrollment?.Id,
+                Lessons = new List<LearnerLessonDto>() // Lightweight DTO has no lesson details
+            };
         }
     }
 }

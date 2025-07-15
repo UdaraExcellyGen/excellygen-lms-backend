@@ -30,7 +30,6 @@ namespace ExcellyGenLMS.API.Controllers.Admin
             _logger = logger;
         }
 
-        // READ OPERATIONS - Allow both Admin and Learner with optimization
         [HttpGet]
         [Authorize(Roles = "Admin,Learner")]
         public async Task<ActionResult<List<CourseCategoryDto>>> GetAllCategories()
@@ -42,7 +41,6 @@ namespace ExcellyGenLMS.API.Controllers.Admin
 
                 var categories = await _categoryService.GetAllCategoriesAsync();
 
-                // If user is Learner, only return active categories
                 if (User.IsInRole("Learner") && !User.IsInRole("Admin"))
                 {
                     categories = categories.Where(c => string.Equals(c.Status, "active", StringComparison.OrdinalIgnoreCase)).ToList();
@@ -68,7 +66,6 @@ namespace ExcellyGenLMS.API.Controllers.Admin
 
                 var category = await _categoryService.GetCategoryByIdAsync(id);
 
-                // If user is Learner, only return if category is active
                 if (User.IsInRole("Learner") && !User.IsInRole("Admin"))
                 {
                     if (!string.Equals(category.Status, "active", StringComparison.OrdinalIgnoreCase))
@@ -91,7 +88,6 @@ namespace ExcellyGenLMS.API.Controllers.Admin
             }
         }
 
-        // OPTIMIZATION: Combined endpoint to get courses and stats in one call
         [HttpGet("{categoryId}/courses-with-stats")]
         [Authorize(Roles = "Admin,Learner")]
         public async Task<ActionResult<object>> GetCoursesWithStatsByCategory(string categoryId)
@@ -101,10 +97,8 @@ namespace ExcellyGenLMS.API.Controllers.Admin
                 var userRole = User.IsInRole("Admin") ? "Admin" : "Learner";
                 _logger.LogInformation("Getting courses and stats for category with ID: {CategoryId}, role: {Role}", categoryId, userRole);
 
-                // First verify the category exists and is accessible
                 var category = await _categoryService.GetCategoryByIdAsync(categoryId);
 
-                // If user is Learner, ensure category is active
                 if (User.IsInRole("Learner") && !User.IsInRole("Admin"))
                 {
                     if (!string.Equals(category.Status, "active", StringComparison.OrdinalIgnoreCase))
@@ -113,19 +107,17 @@ namespace ExcellyGenLMS.API.Controllers.Admin
                     }
                 }
 
-                // OPTIMIZATION: Get courses and stats in parallel
                 var coursesTask = _courseService.GetCoursesByCategoryIdAsync(categoryId);
 
-                // Only get stats for Admin users to reduce unnecessary queries
-                Task<ExcellyGenLMS.Application.Services.Admin.AdminCategoryStatsDto> statsTask = null;
+                // FIX: Declare a nullable variable to hold the stats result, which resolves the warning.
+                ExcellyGenLMS.Application.Services.Admin.AdminCategoryStatsDto? statsResult = null;
                 if (User.IsInRole("Admin"))
                 {
-                    statsTask = _courseService.GetCategoryStatsAsync(categoryId);
+                    statsResult = await _courseService.GetCategoryStatsAsync(categoryId);
                 }
 
                 var courses = await coursesTask;
 
-                // If user is Learner, only return published courses
                 if (User.IsInRole("Learner") && !User.IsInRole("Admin"))
                 {
                     courses = courses.Where(c => c.Status.ToString().Equals("Published", StringComparison.OrdinalIgnoreCase)).ToList();
@@ -135,7 +127,7 @@ namespace ExcellyGenLMS.API.Controllers.Admin
                 {
                     Category = category,
                     Courses = courses,
-                    Stats = statsTask != null ? await statsTask : null,
+                    Stats = statsResult,
                     TotalCourses = courses.Count
                 };
 
@@ -153,7 +145,6 @@ namespace ExcellyGenLMS.API.Controllers.Admin
             }
         }
 
-        // OPTIMIZATION: Keep original endpoint for backward compatibility
         [HttpGet("{categoryId}/courses")]
         [Authorize(Roles = "Admin,Learner")]
         public async Task<ActionResult<List<CourseDto>>> GetCoursesByCategory(string categoryId)
@@ -163,10 +154,8 @@ namespace ExcellyGenLMS.API.Controllers.Admin
                 var userRole = User.IsInRole("Admin") ? "Admin" : "Learner";
                 _logger.LogInformation("Getting courses for category with ID: {CategoryId}, role: {Role}", categoryId, userRole);
 
-                // First verify the category exists and is accessible
                 var category = await _categoryService.GetCategoryByIdAsync(categoryId);
 
-                // If user is Learner, ensure category is active
                 if (User.IsInRole("Learner") && !User.IsInRole("Admin"))
                 {
                     if (!string.Equals(category.Status, "active", StringComparison.OrdinalIgnoreCase))
@@ -175,10 +164,8 @@ namespace ExcellyGenLMS.API.Controllers.Admin
                     }
                 }
 
-                // Get courses for this category
                 var courses = await _courseService.GetCoursesByCategoryIdAsync(categoryId);
 
-                // If user is Learner, only return published courses
                 if (User.IsInRole("Learner") && !User.IsInRole("Admin"))
                 {
                     courses = courses.Where(c => c.Status.ToString().Equals("Published", StringComparison.OrdinalIgnoreCase)).ToList();
@@ -198,7 +185,6 @@ namespace ExcellyGenLMS.API.Controllers.Admin
             }
         }
 
-        // WRITE OPERATIONS - Admin only
         [HttpPost]
         [Authorize(Roles = "Admin")]
         public async Task<ActionResult<CourseCategoryDto>> CreateCategory([FromBody] CreateCourseCategoryDto createCategoryDto)
