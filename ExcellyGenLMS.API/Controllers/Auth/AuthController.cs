@@ -14,6 +14,7 @@ using System.IdentityModel.Tokens.Jwt;
 using ExcellyGenLMS.Application.Interfaces.Admin;
 using System.Security;
 using System.Linq;
+using System.Security.Claims;
 
 namespace ExcellyGenLMS.API.Controllers.Auth
 {
@@ -57,10 +58,8 @@ namespace ExcellyGenLMS.API.Controllers.Auth
             {
                 _logger.LogInformation($"Login attempt for email: {loginDto.Email}");
 
-                // OPTIMIZATION: Only verify Firebase token if it's provided and not empty
                 if (!string.IsNullOrEmpty(loginDto.FirebaseToken))
                 {
-                    // OPTIMIZATION: Run Firebase verification asynchronously without blocking
                     _ = Task.Run(async () =>
                     {
                         try
@@ -75,10 +74,8 @@ namespace ExcellyGenLMS.API.Controllers.Auth
                     });
                 }
 
-                // OPTIMIZATION: Main login process - don't wait for Firebase verification
                 var tokenDto = await _authService.LoginAsync(loginDto);
 
-                // OPTIMIZATION: Single database call to get user
                 var user = await _userRepository.GetUserByEmailAsync(loginDto.Email);
 
                 if (user == null)
@@ -87,7 +84,6 @@ namespace ExcellyGenLMS.API.Controllers.Auth
                     return Unauthorized(new { message = "User not found" });
                 }
 
-                // OPTIMIZATION: Build response object directly
                 var result = new AuthResultDto
                 {
                     UserId = user.Id,
@@ -111,6 +107,32 @@ namespace ExcellyGenLMS.API.Controllers.Auth
             {
                 _logger.LogError($"Login error: {ex.Message}");
                 return StatusCode(500, new { message = "An error occurred during login" });
+            }
+        }
+
+        [HttpPost("heartbeat")]
+        [Authorize]
+        public async Task<IActionResult> Heartbeat()
+        {
+            try
+            {
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                if (string.IsNullOrEmpty(userId))
+                {
+                    return Unauthorized(new { message = "Invalid token: User identifier not found." });
+                }
+                var result = await _authService.HeartbeatAsync(userId);
+                return Ok(result);
+            }
+            catch (AuthenticationException ex)
+            {
+                _logger.LogWarning($"Heartbeat authentication failed: {ex.Message}");
+                return Unauthorized(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Heartbeat error: {ex.Message}");
+                return StatusCode(500, new { message = "An error occurred during heartbeat processing." });
             }
         }
 
@@ -183,13 +205,10 @@ namespace ExcellyGenLMS.API.Controllers.Auth
             try
             {
                 var result = await _authService.ResetPasswordAsync(resetPasswordDto.Email);
-
-                // Always return success for security reasons
                 return Ok(new { message = "If your email exists in our system, a password reset link has been sent" });
             }
             catch (Exception ex)
             {
-                // Log the error but don't expose it to the client
                 _logger.LogError($"Password reset error: {ex.Message}");
                 return Ok(new { message = "If your email exists in our system, a password reset link has been sent" });
             }
@@ -231,60 +250,6 @@ namespace ExcellyGenLMS.API.Controllers.Auth
             }
         }
 
-        [HttpPost("heartbeat")]
-        public async Task<ActionResult> Heartbeat([FromBody] HeartbeatDto heartbeatDto)
-        {
-            try
-            {
-                _logger.LogInformation("Processing session heartbeat");
-
-                if (string.IsNullOrEmpty(heartbeatDto.AccessToken))
-                {
-                    return BadRequest(new { message = "Access token is required" });
-                }
-
-                // Validate the token but also extend its lifetime
-                var principal = _tokenService.GetPrincipalFromExpiredToken(heartbeatDto.AccessToken);
-                var userId = principal.Claims.FirstOrDefault(c => c.Type == JwtRegisteredClaimNames.Sub)?.Value;
-                var currentRole = principal.Claims.FirstOrDefault(c => c.Type == "CurrentRole")?.Value;
-
-                if (string.IsNullOrEmpty(userId) || string.IsNullOrEmpty(currentRole))
-                {
-                    _logger.LogWarning("Invalid access token in heartbeat: missing claims");
-                    return BadRequest(new { message = "Invalid access token" });
-                }
-
-                // Check if user exists and is active
-                var user = await _userRepository.GetUserByIdAsync(userId);
-                if (user == null)
-                {
-                    _logger.LogWarning("User not found in heartbeat");
-                    return Unauthorized(new { message = "User not found" });
-                }
-
-                if (user.Status != "active")
-                {
-                    _logger.LogWarning("User is inactive in heartbeat");
-                    return Unauthorized(new { message = "User is inactive" });
-                }
-
-                // Generate a new token with extended expiration
-                var tokenDto = _tokenService.GenerateTokens(user, currentRole);
-
-                // Update the expiry time on the client side
-                return Ok(new
-                {
-                    accessToken = tokenDto.AccessToken,
-                    expiresAt = tokenDto.ExpiresAt
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError($"Heartbeat error: {ex.Message}");
-                return StatusCode(500, new { message = "An error occurred", details = ex.Message });
-            }
-        }
-
         [HttpPost("sync-firebase-users")]
         [Authorize(Roles = "Admin,SuperAdmin")]
         public async Task<ActionResult> SyncFirebaseUsers()
@@ -300,15 +265,10 @@ namespace ExcellyGenLMS.API.Controllers.Auth
                 {
                     try
                     {
-                        // Only sync users with missing or invalid Firebase UIDs
                         if (string.IsNullOrEmpty(user.FirebaseUid) || user.FirebaseUid.Length < 20 || user.FirebaseUid.StartsWith("$2"))
                         {
                             _logger.LogInformation($"Syncing user {user.Email} with Firebase");
-
-                            // Generate a random password for existing users
                             string tempPassword = Guid.NewGuid().ToString().Substring(0, 12) + "!A1";
-
-                            // Create or get user in Firebase
                             string firebaseUid = await _firebaseAuthService.CreateUserAsync(new CreateUserDto
                             {
                                 Email = user.Email,
@@ -318,11 +278,8 @@ namespace ExcellyGenLMS.API.Controllers.Auth
                                 Roles = user.Roles ?? new List<string>(),
                                 Department = user.Department ?? ""
                             });
-
-                            // Update user in database with real Firebase UID
                             user.FirebaseUid = firebaseUid;
                             await _userRepository.UpdateUserAsync(user);
-
                             syncCount++;
                             _logger.LogInformation($"User {user.Email} synced with Firebase UID: {firebaseUid}");
                         }
@@ -359,27 +316,20 @@ namespace ExcellyGenLMS.API.Controllers.Auth
                 {
                     return BadRequest("Missing required fields");
                 }
-
-                // Verify the user exists and matches the email
                 var user = await _userService.GetUserByIdAsync(request.UserId);
                 if (user == null || user.Email != request.Email)
                 {
-                    // Don't reveal specifics for security
-                    return Ok(); // Return OK anyway to prevent user enumeration
+                    return Ok();
                 }
-
-                // Send the email
                 bool success = await _emailService.SendTemporaryPasswordEmailAsync(
                     user.Email,
                     user.Name,
                     request.TempPassword
                 );
-
                 if (!success)
                 {
                     return StatusCode(500, "Failed to send email");
                 }
-
                 return Ok();
             }
             catch (Exception ex)
@@ -398,54 +348,23 @@ namespace ExcellyGenLMS.API.Controllers.Auth
                 _logger.LogInformation("Starting role capitalization fix");
                 var users = await _userRepository.GetAllUsersAsync();
                 int fixedCount = 0;
-
                 foreach (var user in users)
                 {
                     bool needsUpdate = false;
                     var updatedRoles = new List<string>();
-
                     if (user.Roles != null)
                     {
                         foreach (var role in user.Roles)
                         {
                             string formattedRole = role;
-
-                            // Apply proper capitalization based on your enum format
-                            if (role.Equals("admin", StringComparison.OrdinalIgnoreCase) && role != "Admin")
-                            {
-                                formattedRole = "Admin";
-                                needsUpdate = true;
-                            }
-                            else if (role.Equals("learner", StringComparison.OrdinalIgnoreCase) && role != "Learner")
-                            {
-                                formattedRole = "Learner";
-                                needsUpdate = true;
-                            }
-                            else if ((role.Equals("coordinator", StringComparison.OrdinalIgnoreCase) ||
-                                    role.Equals("course coordinator", StringComparison.OrdinalIgnoreCase) ||
-                                    role.Equals("course_coordinator", StringComparison.OrdinalIgnoreCase)) &&
-                                    role != "CourseCoordinator")
-                            {
-                                formattedRole = "CourseCoordinator";
-                                needsUpdate = true;
-                            }
-                            else if ((role.Equals("project_manager", StringComparison.OrdinalIgnoreCase) ||
-                                    role.Equals("project manager", StringComparison.OrdinalIgnoreCase)) &&
-                                    role != "ProjectManager")
-                            {
-                                formattedRole = "ProjectManager";
-                                needsUpdate = true;
-                            }
-                            else if (role.Equals("superadmin", StringComparison.OrdinalIgnoreCase) && role != "SuperAdmin")
-                            {
-                                formattedRole = "SuperAdmin";
-                                needsUpdate = true;
-                            }
-
+                            if (role.Equals("admin", StringComparison.OrdinalIgnoreCase) && role != "Admin") { formattedRole = "Admin"; needsUpdate = true; }
+                            else if (role.Equals("learner", StringComparison.OrdinalIgnoreCase) && role != "Learner") { formattedRole = "Learner"; needsUpdate = true; }
+                            else if ((role.Equals("coordinator", StringComparison.OrdinalIgnoreCase) || role.Equals("course coordinator", StringComparison.OrdinalIgnoreCase) || role.Equals("course_coordinator", StringComparison.OrdinalIgnoreCase)) && role != "CourseCoordinator") { formattedRole = "CourseCoordinator"; needsUpdate = true; }
+                            else if ((role.Equals("project_manager", StringComparison.OrdinalIgnoreCase) || role.Equals("project manager", StringComparison.OrdinalIgnoreCase)) && role != "ProjectManager") { formattedRole = "ProjectManager"; needsUpdate = true; }
+                            else if (role.Equals("superadmin", StringComparison.OrdinalIgnoreCase) && role != "SuperAdmin") { formattedRole = "SuperAdmin"; needsUpdate = true; }
                             updatedRoles.Add(formattedRole);
                         }
                     }
-
                     if (needsUpdate)
                     {
                         user.Roles = updatedRoles;
@@ -454,13 +373,7 @@ namespace ExcellyGenLMS.API.Controllers.Auth
                         _logger.LogInformation($"Fixed role capitalization for user: {user.Email}");
                     }
                 }
-
-                return Ok(new
-                {
-                    message = $"Fixed role capitalization for {fixedCount} users",
-                    fixedCount = fixedCount,
-                    totalUsers = users.Count
-                });
+                return Ok(new { message = $"Fixed role capitalization for {fixedCount} users", fixedCount, totalUsers = users.Count });
             }
             catch (Exception ex)
             {
@@ -476,22 +389,16 @@ namespace ExcellyGenLMS.API.Controllers.Auth
             try
             {
                 _logger.LogInformation($"SuperAdmin promotion request for user: {request.UserId}");
-
-                // Get the current user ID from the token
                 var userId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
                 if (string.IsNullOrEmpty(userId))
                 {
                     return Unauthorized(new { message = "Invalid token" });
                 }
-
-                // Check if the UserManagementService is available
                 if (_userManagementService == null)
                 {
                     _logger.LogWarning("UserManagementService is not available");
                     return StatusCode(500, new { message = "SuperAdmin promotion service is not available" });
                 }
-
-                // Call the service method to promote the user
                 try
                 {
                     var result = await _userManagementService.PromoteToSuperAdminAsync(userId, request.UserId);
@@ -499,7 +406,6 @@ namespace ExcellyGenLMS.API.Controllers.Auth
                     {
                         return NotFound(new { message = "User not found" });
                     }
-
                     return Ok(result);
                 }
                 catch (SecurityException ex)
@@ -516,7 +422,6 @@ namespace ExcellyGenLMS.API.Controllers.Auth
         }
     }
 
-    // DTO for promoting a user to SuperAdmin
     public class PromoteToSuperAdminDto
     {
         public required string UserId { get; set; }

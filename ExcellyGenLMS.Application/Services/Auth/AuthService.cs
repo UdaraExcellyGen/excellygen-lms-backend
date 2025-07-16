@@ -7,6 +7,11 @@ using ExcellyGenLMS.Core.Interfaces.Repositories.Auth;
 using System.Security.Authentication;
 using System.IdentityModel.Tokens.Jwt;
 using Microsoft.IdentityModel.Tokens;
+using System;
+using System.Linq;
+using System.Threading.Tasks;
+using ExcellyGenLMS.Core.Entities.Learner;
+using ExcellyGenLMS.Core.Interfaces.Repositories.Learner;
 
 namespace ExcellyGenLMS.Application.Services.Auth
 {
@@ -17,19 +22,43 @@ namespace ExcellyGenLMS.Application.Services.Auth
         private readonly IFirebaseAuthService _firebaseAuthService;
         private readonly ITokenService _tokenService;
         private readonly IConfiguration _configuration;
+        private readonly IUserActivityLogRepository _activityLogRepository;
 
         public AuthService(
             IUserRepository userRepository,
             IRefreshTokenRepository refreshTokenRepository,
             IFirebaseAuthService firebaseAuthService,
             ITokenService tokenService,
-            IConfiguration configuration)
+            IConfiguration configuration,
+            IUserActivityLogRepository activityLogRepository)
         {
             _userRepository = userRepository;
             _refreshTokenRepository = refreshTokenRepository;
             _firebaseAuthService = firebaseAuthService;
             _tokenService = tokenService;
             _configuration = configuration;
+            _activityLogRepository = activityLogRepository;
+        }
+
+        public async Task<HeartbeatDto> HeartbeatAsync(string userId)
+        {
+            var user = await _userRepository.GetUserByIdAsync(userId);
+            if (user == null || user.Status != "active")
+            {
+                throw new AuthenticationException("Invalid user or user is inactive.");
+            }
+
+            var activityLog = new UserActivityLog { UserId = userId };
+            await _activityLogRepository.AddAsync(activityLog);
+
+            var tokenExpiry = DateTime.UtcNow.AddMinutes(15);
+
+            return new HeartbeatDto
+            {
+                Status = "Active",
+                AccessToken = null,
+                ExpiresAt = tokenExpiry
+            };
         }
 
         public async Task<TokenDto> LoginAsync(LoginDto loginDto)
@@ -38,7 +67,6 @@ namespace ExcellyGenLMS.Application.Services.Auth
             {
                 Console.WriteLine($"Login attempt for: {loginDto.Email}");
 
-                // First find the user in our database by email
                 var user = await _userRepository.GetUserByEmailAsync(loginDto.Email);
 
                 if (user == null)
@@ -53,21 +81,15 @@ namespace ExcellyGenLMS.Application.Services.Auth
                     throw new AuthenticationException("User is inactive");
                 }
 
-                // WORKAROUND FOR AUTHENTICATION:
-                // Instead of using Firebase Auth Client directly, we'll validate the password
-                // using the Admin SDK's special method
                 bool isAuthenticated = false;
 
                 if (!string.IsNullOrEmpty(loginDto.Password))
                 {
                     try
                     {
-                        // If the user has a Firebase UID, use it to verify their credentials
                         if (!string.IsNullOrEmpty(user.FirebaseUid))
                         {
                             Console.WriteLine($"Verifying password for Firebase UID: {user.FirebaseUid}");
-
-                            // Call AdminVerifyPassword method in FirebaseAuthService
                             isAuthenticated = await _firebaseAuthService.AdminVerifyPasswordAsync(loginDto.Email, loginDto.Password);
                             Console.WriteLine($"Admin SDK password verification result: {isAuthenticated}");
 
@@ -94,17 +116,12 @@ namespace ExcellyGenLMS.Application.Services.Auth
                     throw new AuthenticationException("Password is required");
                 }
 
-                // Determine the default role if the user has multiple roles
-                Console.WriteLine("Finding default role");
                 string defaultRole = user.Roles.FirstOrDefault() ?? throw new AuthenticationException("User has no roles");
 
                 Console.WriteLine($"Default role: {defaultRole}");
 
-                // Generate JWT tokens
-                Console.WriteLine("Generating JWT tokens");
                 var tokenDto = _tokenService.GenerateTokens(user, defaultRole);
 
-                // Create and save refresh token
                 Console.WriteLine("Creating refresh token");
                 var refreshTokenExpiryDays = int.Parse(_configuration["Jwt:RefreshTokenExpiryInDays"] ?? "7");
                 var refreshToken = new RefreshToken
@@ -117,7 +134,6 @@ namespace ExcellyGenLMS.Application.Services.Auth
                 await _refreshTokenRepository.CreateAsync(refreshToken);
                 Console.WriteLine("Login successful");
 
-                // Add password change requirement flag to token response
                 tokenDto.RequirePasswordChange = user.RequirePasswordChange;
 
                 return tokenDto;
@@ -129,7 +145,7 @@ namespace ExcellyGenLMS.Application.Services.Auth
                 {
                     Console.WriteLine($"Inner exception: {ex.InnerException.Message}");
                 }
-                throw; // Rethrow to let the controller handle it
+                throw;
             }
         }
 
@@ -139,7 +155,6 @@ namespace ExcellyGenLMS.Application.Services.Auth
             {
                 Console.WriteLine($"Password change request for user: {changePasswordDto.UserId}");
 
-                // Get the user
                 var user = await _userRepository.GetUserByIdAsync(changePasswordDto.UserId);
                 if (user == null)
                 {
@@ -147,11 +162,9 @@ namespace ExcellyGenLMS.Application.Services.Auth
                     throw new InvalidOperationException("User not found");
                 }
 
-                // Use the same AdminVerifyPasswordAsync workaround as login
                 bool passwordVerified = false;
                 try
                 {
-                    // Verify current password using Admin SDK workaround
                     passwordVerified = await _firebaseAuthService.AdminVerifyPasswordAsync(
                         user.Email,
                         changePasswordDto.CurrentPassword
@@ -171,7 +184,6 @@ namespace ExcellyGenLMS.Application.Services.Auth
                     throw new InvalidOperationException("Current password is incorrect");
                 }
 
-                // Update password in Firebase
                 try
                 {
                     await _firebaseAuthService.UpdateUserPasswordAsync(
@@ -179,7 +191,6 @@ namespace ExcellyGenLMS.Application.Services.Auth
                         changePasswordDto.NewPassword
                     );
 
-                    // Update the password change requirement flag
                     user.RequirePasswordChange = false;
                     await _userRepository.UpdateUserAsync(user);
 
@@ -240,12 +251,10 @@ namespace ExcellyGenLMS.Application.Services.Auth
                     throw new SecurityTokenException("Refresh token has been used or revoked");
                 }
 
-                // Mark the current refresh token as used
                 refreshTokenEntity.IsUsed = true;
                 await _refreshTokenRepository.UpdateAsync(refreshTokenEntity);
                 Console.WriteLine("Marked old refresh token as used");
 
-                // Generate new tokens
                 var user = await _userRepository.GetUserByIdAsync(userId);
                 if (user == null)
                 {
@@ -256,7 +265,6 @@ namespace ExcellyGenLMS.Application.Services.Auth
                 Console.WriteLine($"Generating new tokens for user: {user.Id}, role: {currentRole}");
                 var newTokenDto = _tokenService.GenerateTokens(user, currentRole);
 
-                // Create and save new refresh token
                 var refreshTokenExpiryDays = int.Parse(_configuration["Jwt:RefreshTokenExpiryInDays"] ?? "7");
                 var newRefreshToken = new RefreshToken
                 {
@@ -268,7 +276,6 @@ namespace ExcellyGenLMS.Application.Services.Auth
                 await _refreshTokenRepository.CreateAsync(newRefreshToken);
                 Console.WriteLine("Created new refresh token");
 
-                // Add password change requirement flag to token response
                 newTokenDto.RequirePasswordChange = user.RequirePasswordChange;
 
                 return newTokenDto;
@@ -319,7 +326,6 @@ namespace ExcellyGenLMS.Application.Services.Auth
 
                 if (user == null)
                 {
-                    // Don't reveal that the user doesn't exist for security reasons
                     Console.WriteLine("User not found, but not revealing for security");
                     return false;
                 }
@@ -360,12 +366,8 @@ namespace ExcellyGenLMS.Application.Services.Auth
                     throw new AuthenticationException("User does not have the selected role");
                 }
 
-                // Generate new tokens for the selected role
-                Console.WriteLine("Generating tokens for new role");
                 var tokenDto = _tokenService.GenerateTokens(user, selectRoleDto.Role);
 
-                // Create and save new refresh token
-                Console.WriteLine("Creating refresh token");
                 var refreshTokenExpiryDays = int.Parse(_configuration["Jwt:RefreshTokenExpiryInDays"] ?? "7");
                 var refreshToken = new RefreshToken
                 {
@@ -377,7 +379,6 @@ namespace ExcellyGenLMS.Application.Services.Auth
                 await _refreshTokenRepository.CreateAsync(refreshToken);
                 Console.WriteLine("Role selection successful");
 
-                // Add password change requirement flag to token response
                 tokenDto.RequirePasswordChange = user.RequirePasswordChange;
 
                 return tokenDto;
@@ -403,7 +404,6 @@ namespace ExcellyGenLMS.Application.Services.Auth
                     return false;
                 }
 
-                // Check if user exists and is active
                 var user = await _userRepository.GetUserByIdAsync(userId);
                 if (user == null)
                 {
