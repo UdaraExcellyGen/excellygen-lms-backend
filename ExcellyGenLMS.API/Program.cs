@@ -36,6 +36,8 @@ using ExcellyGenLMS.Application.Services.Course;
 using ExcellyGenLMS.Application.Services.Learner;
 using ExcellyGenLMS.Application.Services.ProjectManager;
 using ExcellyGenLMS.API.Middleware;
+using ExcellyGenLMS.Application.Services.Common; // ADDED THIS
+using ExcellyGenLMS.API.Workers;                 // ADDED THIS
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -54,6 +56,9 @@ try
     // ===== WEB API CONFIGURATION =====
     ConfigureControllers(builder);
     ConfigureSwagger(builder);
+
+    // ADDED THIS LINE - Registers the hosted service
+    builder.Services.AddHostedService<ScheduledCleanupWorker>();
 
     // ===== BUILD APPLICATION =====
     var app = builder.Build();
@@ -295,9 +300,8 @@ static void RegisterRepositories(IServiceCollection services)
     services.AddScoped<IRoleRepository, RoleRepository>();
     services.AddScoped<IPMEmployeeAssignmentRepository, PMEmployeeAssignmentRepository>();
     services.AddScoped<ILeaderboardRepository, LeaderboardRepository>();
-
-    // == NEW BADGE REPOSITORY ==
     services.AddScoped<IBadgeRepository, BadgeRepository>();
+    services.AddScoped<IUserActivityLogRepository, UserActivityLogRepository>();
 
     Console.WriteLine("Repository registrations completed.");
 }
@@ -346,9 +350,10 @@ static void RegisterApplicationServices(IServiceCollection services)
     services.AddScoped<ExcellyGenLMS.Application.Interfaces.ProjectManager.IProjectService, ExcellyGenLMS.Application.Services.ProjectManager.ProjectService>();
     services.AddScoped<ExcellyGenLMS.Application.Interfaces.ProjectManager.IRoleService, ExcellyGenLMS.Application.Services.ProjectManager.RoleService>();
     services.AddScoped<ExcellyGenLMS.Application.Interfaces.ProjectManager.IPMTechnologyService, ExcellyGenLMS.Application.Services.ProjectManager.PMTechnologyService>();
-
-    // == NEW BADGE SERVICE ==
     services.AddScoped<IBadgesAndRewardsService, BadgesAndRewardsService>();
+
+    // ADDED THIS LINE
+    services.AddScoped<IDataCleanupService, DataCleanupService>();
 
     Console.WriteLine("Application services registration completed.");
 }

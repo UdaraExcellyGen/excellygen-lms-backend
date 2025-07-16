@@ -21,7 +21,6 @@ namespace ExcellyGenLMS.Infrastructure.Data
         {
         }
 
-        // --- DbSets ---
         public DbSet<User> Users { get; set; } = null!;
         public DbSet<RefreshToken> RefreshTokens { get; set; } = null!;
         public DbSet<CourseCategory> CourseCategories { get; set; } = null!;
@@ -30,8 +29,8 @@ namespace ExcellyGenLMS.Infrastructure.Data
         public DbSet<ThreadComment> ThreadComments { get; set; } = null!;
         public DbSet<ThreadComReply> ThreadComReplies { get; set; } = null!;
         public DbSet<CV> CVs { get; set; } = null!;
-        public DbSet<Badge> Badges { get; set; } = null!; // BADGE SYSTEM
-        public DbSet<UserBadge> UserBadges { get; set; } = null!; // BADGE SYSTEM
+        public DbSet<Badge> Badges { get; set; } = null!;
+        public DbSet<UserBadge> UserBadges { get; set; } = null!;
         public DbSet<UserTechnology> UserTechnologies { get; set; } = null!;
         public DbSet<Project> Projects { get; set; } = null!;
         public DbSet<ProjectTechnology> ProjectTechnologies { get; set; } = null!;
@@ -60,6 +59,7 @@ namespace ExcellyGenLMS.Infrastructure.Data
         public DbSet<PMProjectRequiredRole> PMProjectRequiredRoles { get; set; } = null!;
         public DbSet<PMRoleDefinition> PMRoleDefinitions { get; set; } = null!;
         public DbSet<PMNotification> PMNotifications { get; set; } = null!;
+        public DbSet<UserActivityLog> UserActivityLogs { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -189,7 +189,6 @@ namespace ExcellyGenLMS.Infrastructure.Data
 
             modelBuilder.Entity<CV>().HasKey(e => e.CvId);
 
-            // == NEW BADGE CONFIGURATION ==
             modelBuilder.Entity<Badge>().HasKey(e => e.Id);
             modelBuilder.Entity<UserBadge>().HasKey(e => e.Id);
             modelBuilder.Entity<UserBadge>()
@@ -202,7 +201,6 @@ namespace ExcellyGenLMS.Infrastructure.Data
                 .WithMany(b => b.UserBadges)
                 .HasForeignKey(e => e.BadgeId)
                 .OnDelete(DeleteBehavior.Cascade);
-            // == END OF NEW BADGE CONFIGURATION ==
 
             modelBuilder.Entity<UserTechnology>(entity =>
             {
@@ -450,6 +448,16 @@ namespace ExcellyGenLMS.Infrastructure.Data
                 .WithMany()
                 .HasForeignKey(e => e.RecipientId)
                 .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<UserActivityLog>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.HasOne(e => e.User)
+                      .WithMany()
+                      .HasForeignKey(e => e.UserId)
+                      .OnDelete(DeleteBehavior.Cascade);
+                entity.HasIndex(e => new { e.UserId, e.ActivityTimestamp });
+            });
         }
     }
 }

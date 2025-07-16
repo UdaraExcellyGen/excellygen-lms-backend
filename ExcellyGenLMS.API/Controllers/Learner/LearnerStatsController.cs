@@ -1,8 +1,10 @@
-// ExcellyGenLMS.API/Controllers/Learner/LearnerStatsController.cs
 using ExcellyGenLMS.Application.DTOs;
+using ExcellyGenLMS.Application.DTOs.Learner;     // ADDED
 using ExcellyGenLMS.Application.Interfaces.Learner;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Collections.Generic;                    // ADDED
+using System.Security.Claims;                        // ADDED
 using System.Threading.Tasks;
 
 namespace ExcellyGenLMS.API.Controllers.Learner
@@ -24,6 +26,19 @@ namespace ExcellyGenLMS.API.Controllers.Learner
         {
             var stats = await _learnerStatsService.GetOverallLmsStatsAsync();
             return Ok(stats);
+        }
+
+        // ADDED THIS ENDPOINT
+        [HttpGet("weekly-activity")]
+        public async Task<ActionResult<IEnumerable<DailyScreenTimeDto>>> GetWeeklyActivity()
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userId == null)
+            {
+                return Unauthorized();
+            }
+            var result = await _learnerStatsService.GetWeeklyScreenTimeAsync(userId);
+            return Ok(result);
         }
     }
 }
