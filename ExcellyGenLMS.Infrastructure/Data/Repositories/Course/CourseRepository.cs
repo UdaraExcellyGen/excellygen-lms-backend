@@ -1,3 +1,4 @@
+// ExcellyGenLMS.Infrastructure/Data/Repositories/Course/CourseRepository.cs
 using ExcellyGenLMS.Core.Entities.Course;
 using ExcellyGenLMS.Core.Interfaces.Repositories.Course;
 using Microsoft.EntityFrameworkCore;
@@ -159,6 +160,27 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
                 .Select(c => (double?)c.EstimatedTime)
                 .AverageAsync();
             return averageHours.HasValue ? TimeSpan.FromHours(averageHours.Value) : (TimeSpan?)null;
+        }
+
+        // NEW METHODS FOR ANALYTICS
+        public async Task<IEnumerable<Core.Entities.Course.Course>> GetCoursesByCreatorIdAsync(string creatorId)
+        {
+            return await _context.Courses
+                .Include(c => c.Category)
+                .Include(c => c.Creator)
+                .Where(c => c.CreatorId == creatorId)
+                .AsNoTracking()
+                .ToListAsync();
+        }
+
+        public async Task<IEnumerable<Core.Entities.Course.Course>> GetCoursesByCreatorIdAndCategoryAsync(string creatorId, string categoryId)
+        {
+            return await _context.Courses
+                .Include(c => c.Category)
+                .Include(c => c.Creator)
+                .Where(c => c.CreatorId == creatorId && c.CategoryId == categoryId)
+                .AsNoTracking()
+                .ToListAsync();
         }
     }
 }
