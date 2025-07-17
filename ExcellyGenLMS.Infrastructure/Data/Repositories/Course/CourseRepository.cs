@@ -1,4 +1,3 @@
-// ExcellyGenLMS.Infrastructure/Data/Repositories/Course/CourseRepository.cs
 using ExcellyGenLMS.Core.Entities.Course;
 using ExcellyGenLMS.Core.Interfaces.Repositories.Course;
 using Microsoft.EntityFrameworkCore;
@@ -162,24 +161,44 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
             return averageHours.HasValue ? TimeSpan.FromHours(averageHours.Value) : (TimeSpan?)null;
         }
 
-        // NEW METHODS FOR ANALYTICS
-        public async Task<IEnumerable<Core.Entities.Course.Course>> GetCoursesByCreatorIdAsync(string creatorId)
+        public async Task<IEnumerable<Core.Entities.Course.Course>> GetCoursesByCreatorIdAsync(string? creatorId, string? categoryId = null)
         {
-            return await _context.Courses
+            var query = _context.Courses
                 .Include(c => c.Category)
                 .Include(c => c.Creator)
-                .Where(c => c.CreatorId == creatorId)
-                .AsNoTracking()
-                .ToListAsync();
+                .AsNoTracking();
+
+            if (!string.IsNullOrEmpty(creatorId))
+            {
+                query = query.Where(c => c.CreatorId == creatorId);
+            }
+
+            if (!string.IsNullOrEmpty(categoryId))
+            {
+                query = query.Where(c => c.CategoryId == categoryId);
+            }
+
+            return await query.OrderBy(c => c.Title).ToListAsync();
         }
 
-        public async Task<IEnumerable<Core.Entities.Course.Course>> GetCoursesByCreatorIdAndCategoryAsync(string creatorId, string categoryId)
+        public async Task<List<Core.Interfaces.Repositories.Course.CourseCategoryAnalyticsDto>> GetCourseCategoryAnalyticsAsync(string coordinatorId)
         {
-            return await _context.Courses
-                .Include(c => c.Category)
-                .Include(c => c.Creator)
-                .Where(c => c.CreatorId == creatorId && c.CategoryId == categoryId)
+            return await _context.CourseCategories
                 .AsNoTracking()
+                .Where(cat => cat.Status == "active" && cat.Courses.Any(c => c.CreatorId == coordinatorId))
+                .Select(cat => new Core.Interfaces.Repositories.Course.CourseCategoryAnalyticsDto
+                {
+                    Id = cat.Id,
+                    Name = cat.Title,
+                    Description = cat.Description,
+                    TotalCourses = cat.Courses.Count(c => c.CreatorId == coordinatorId),
+                    TotalEnrollments = cat.Courses
+                                        .Where(c => c.CreatorId == coordinatorId)
+                                        .SelectMany(c => c.Enrollments)
+                                        .Count()
+                })
+                .Where(dto => dto.TotalCourses > 0)
+                .OrderBy(dto => dto.Name)
                 .ToListAsync();
         }
     }

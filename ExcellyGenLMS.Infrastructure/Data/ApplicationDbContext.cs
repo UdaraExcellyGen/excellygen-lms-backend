@@ -106,6 +106,9 @@ namespace ExcellyGenLMS.Infrastructure.Data
                       .WithMany(cc => cc.Courses)
                       .HasForeignKey(c => c.CategoryId)
                       .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasIndex(e => e.CreatorId).HasDatabaseName("IX_Courses_CreatorId");
+                entity.HasIndex(e => e.CategoryId).HasDatabaseName("IX_Courses_CategoryId");
             });
 
             modelBuilder.Entity<Lesson>(entity =>
@@ -116,6 +119,8 @@ namespace ExcellyGenLMS.Infrastructure.Data
                       .WithMany(c => c.Lessons)
                       .HasForeignKey(l => l.CourseId)
                       .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasIndex(l => l.CourseId).HasDatabaseName("IX_Lessons_CourseId");
             });
 
             modelBuilder.Entity<CourseDocument>(entity =>
@@ -188,7 +193,6 @@ namespace ExcellyGenLMS.Infrastructure.Data
             });
 
             modelBuilder.Entity<CV>().HasKey(e => e.CvId);
-
             modelBuilder.Entity<Badge>().HasKey(e => e.Id);
             modelBuilder.Entity<UserBadge>().HasKey(e => e.Id);
             modelBuilder.Entity<UserBadge>()
@@ -216,7 +220,6 @@ namespace ExcellyGenLMS.Infrastructure.Data
             });
 
             modelBuilder.Entity<Project>().HasKey(e => e.Id);
-
             modelBuilder.Entity<ProjectTechnology>().HasKey(e => e.Id);
             modelBuilder.Entity<ProjectTechnology>()
                 .HasOne(e => e.Project)
@@ -242,7 +245,6 @@ namespace ExcellyGenLMS.Infrastructure.Data
                 .OnDelete(DeleteBehavior.Cascade);
 
             modelBuilder.Entity<Certification>().HasKey(e => e.Id);
-
             modelBuilder.Entity<UserCertification>().HasKey(e => e.Id);
             modelBuilder.Entity<UserCertification>()
                 .HasOne(e => e.User)
@@ -282,21 +284,24 @@ namespace ExcellyGenLMS.Infrastructure.Data
                 entity.Property(e => e.IsDeleted).HasDefaultValue(false);
             });
 
-            modelBuilder.Entity<Quiz>().HasKey(q => q.QuizId);
+            modelBuilder.Entity<Quiz>(entity =>
+            {
+                entity.HasKey(q => q.QuizId);
+                entity.HasOne(q => q.Lesson)
+                    .WithMany()
+                    .HasForeignKey(q => q.LessonId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                entity.HasOne(q => q.QuizBank)
+                    .WithMany(qb => qb.Quizzes)
+                    .HasForeignKey(q => q.QuizBankId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasIndex(q => q.LessonId).HasDatabaseName("IX_Quizzes_LessonId");
+            });
+
             modelBuilder.Entity<MCQQuestionOption>().HasKey(m => m.McqOptionId);
             modelBuilder.Entity<QuizBank>().HasKey(qb => qb.QuizBankId);
             modelBuilder.Entity<QuizBankQuestion>().HasKey(qbq => qbq.QuizBankQuestionId);
-
-            modelBuilder.Entity<Quiz>()
-                .HasOne(q => q.Lesson)
-                .WithMany()
-                .HasForeignKey(q => q.LessonId)
-                .OnDelete(DeleteBehavior.Cascade);
-            modelBuilder.Entity<Quiz>()
-                .HasOne(q => q.QuizBank)
-                .WithMany(qb => qb.Quizzes)
-                .HasForeignKey(q => q.QuizBankId)
-                .OnDelete(DeleteBehavior.Cascade);
             modelBuilder.Entity<QuizBank>()
                 .HasMany(qb => qb.QuizBankQuestions)
                 .WithOne(qbQ => qbQ.QuizBank)
@@ -319,6 +324,9 @@ namespace ExcellyGenLMS.Infrastructure.Data
                       .WithMany()
                       .HasForeignKey(e => e.UserId)
                       .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasIndex(qa => qa.QuizId).HasDatabaseName("IX_QuizAttempts_QuizId");
+                entity.HasIndex(qa => new { qa.IsCompleted, qa.Score }).HasDatabaseName("IX_QuizAttempts_Completion_Score");
             });
 
             modelBuilder.Entity<QuizAttemptAnswer>(entity =>
@@ -338,17 +346,22 @@ namespace ExcellyGenLMS.Infrastructure.Data
                       .OnDelete(DeleteBehavior.Restrict);
             });
 
-            modelBuilder.Entity<Enrollment>().HasKey(e => e.Id);
-            modelBuilder.Entity<Enrollment>()
-                .HasOne(e => e.Course)
-                .WithMany()
-                .HasForeignKey(e => e.CourseId)
-                .OnDelete(DeleteBehavior.Cascade);
-            modelBuilder.Entity<Enrollment>()
-                .HasOne(e => e.User)
-                .WithMany()
-                .HasForeignKey(e => e.UserId)
-                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<Enrollment>(entity => {
+                entity.HasKey(e => e.Id);
+                entity.HasOne(e => e.Course)
+                    .WithMany(c => c!.Enrollments)
+                    .HasForeignKey(e => e.CourseId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                entity.HasOne(e => e.User)
+                    .WithMany()
+                    .HasForeignKey(e => e.UserId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasIndex(e => e.CourseId).HasDatabaseName("IX_Enrollments_CourseId");
+                entity.HasIndex(e => e.UserId).HasDatabaseName("IX_Enrollments_UserId");
+                entity.HasIndex(e => e.CompletionDate).HasDatabaseName("IX_Enrollments_CompletionDate");
+            });
+
 
             modelBuilder.Entity<Certificate>().HasKey(c => c.Id);
             modelBuilder.Entity<Certificate>()

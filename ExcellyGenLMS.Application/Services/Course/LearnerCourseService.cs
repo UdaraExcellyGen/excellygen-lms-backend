@@ -149,13 +149,12 @@ namespace ExcellyGenLMS.Application.Services.Course
             catch (Exception ex)
             {
                 _logger.LogError(ex, "An error occurred while retrieving enrolled courses for user {UserId}", userId);
-                throw; // Rethrowing the exception will result in a 500 error on the client, which is appropriate.
+                throw;
             }
         }
 
         public async Task<LearnerCourseDto?> GetLearnerCourseDetailsAsync(string userId, int courseId)
         {
-            // This implementation now works correctly with the detailed GetEnrolledCoursesAsync method above.
             var enrolledCourses = await GetEnrolledCoursesAsync(userId);
             return enrolledCourses.FirstOrDefault(c => c.Id == courseId);
         }
@@ -178,17 +177,29 @@ namespace ExcellyGenLMS.Application.Services.Course
                 await _lessonProgressRepository.UpdateAsync(progress);
             }
 
-            var lessonsInCourse = await _courseRepository.GetLessonsByCourseIdAsync(lesson.CourseId);
-            var completedLessonsForCourse = await _lessonProgressRepository.GetProgressByUserIdAndCourseIdAsync(userId, lesson.CourseId);
+            // --- START: MODIFIED LOGIC ---
+            // Get all lesson IDs for the course
+            var lessonsInCourse = (await _courseRepository.GetLessonsByCourseIdAsync(lesson.CourseId)).Select(l => l.Id).ToHashSet();
 
-            if (lessonsInCourse.Any() && completedLessonsForCourse.Count() >= lessonsInCourse.Count())
+            // Get all of the user's completed lessons for this course
+            var completedLessonsForCourse = (await _lessonProgressRepository.GetProgressByUserIdAndCourseIdAsync(userId, lesson.CourseId))
+                                             .Where(p => p.IsCompleted)
+                                             .Select(p => p.LessonId)
+                                             .ToHashSet();
+
+            // Check if the set of completed lessons contains all the lessons for the course
+            if (lessonsInCourse.Any() && lessonsInCourse.IsSubsetOf(completedLessonsForCourse))
             {
-                if (enrollment.Status != "completed")
+                // Only update if it's not already marked as completed
+                if (enrollment.CompletionDate == null)
                 {
+                    _logger.LogInformation("All lessons completed for course {CourseId} by user {UserId}. Marking enrollment as complete.", lesson.CourseId, userId);
                     enrollment.Status = "completed";
+                    enrollment.CompletionDate = DateTime.UtcNow; // Set the completion date
                     await _enrollmentRepository.UpdateEnrollmentAsync(enrollment);
                 }
             }
+            // --- END: MODIFIED LOGIC ---
 
             return new LessonProgressDto
             {
@@ -204,7 +215,8 @@ namespace ExcellyGenLMS.Application.Services.Course
         public async Task<bool> HasLearnerCompletedAllCourseContentAsync(string userId, int courseId)
         {
             var enrollment = await _enrollmentRepository.GetEnrollmentByUserIdAndCourseIdAsync(userId, courseId);
-            return enrollment?.Status == "completed";
+            // The reliable check is now the CompletionDate, not the status string
+            return enrollment?.CompletionDate != null;
         }
 
         private LearnerCourseDto MapCourseToLightweightDto(Core.Entities.Course.Course course, bool isEnrolled, Enrollment? enrollment = null)
@@ -229,7 +241,7 @@ namespace ExcellyGenLMS.Application.Services.Course
                 EnrollmentDate = enrollment?.EnrollmentDate,
                 EnrollmentStatus = enrollment?.Status ?? "not_enrolled",
                 EnrollmentId = enrollment?.Id,
-                Lessons = new List<LearnerLessonDto>() // Lightweight DTO has no lesson details
+                Lessons = new List<LearnerLessonDto>()
             };
         }
     }

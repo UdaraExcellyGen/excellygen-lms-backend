@@ -1,12 +1,11 @@
-// ExcellyGenLMS.Application/Services/Course/CourseCoordinatorAnalyticsService.cs
-using ExcellyGenLMS.Application.DTOs.Course;
 using ExcellyGenLMS.Application.Interfaces.Course;
 using ExcellyGenLMS.Core.Interfaces.Repositories.Course;
-using ExcellyGenLMS.Core.Interfaces.Repositories.Admin;
 using ExcellyGenLMS.Core.Entities.Course;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using ApplicationCourseCategoryDto = ExcellyGenLMS.Application.DTOs.Course.CourseCategoryAnalyticsDto;
 
 namespace ExcellyGenLMS.Application.Services.Course
 {
@@ -17,431 +16,228 @@ namespace ExcellyGenLMS.Application.Services.Course
         private readonly IQuizRepository _quizRepository;
         private readonly IQuizAttemptRepository _quizAttemptRepository;
         private readonly ILessonRepository _lessonRepository;
-        private readonly ICourseCategoryRepository _courseCategoryRepository;
 
         public CourseCoordinatorAnalyticsService(
             ICourseRepository courseRepository,
             IEnrollmentRepository enrollmentRepository,
             IQuizRepository quizRepository,
             IQuizAttemptRepository quizAttemptRepository,
-            ILessonRepository lessonRepository,
-            ICourseCategoryRepository courseCategoryRepository)
+            ILessonRepository lessonRepository)
         {
             _courseRepository = courseRepository;
             _enrollmentRepository = enrollmentRepository;
             _quizRepository = quizRepository;
             _quizAttemptRepository = quizAttemptRepository;
             _lessonRepository = lessonRepository;
-            _courseCategoryRepository = courseCategoryRepository;
         }
 
-        #region Enhanced Methods (Main Implementation)
-
-        public async Task<EnrollmentAnalyticsResponse> GetEnrollmentAnalyticsAsync(string coordinatorId, string? categoryId = null, string status = "all")
+        public async Task<List<ApplicationCourseCategoryDto>> GetCourseCategoriesAsync(string coordinatorId)
         {
-            // Get all courses for the coordinator
-            var allCourses = await _courseRepository.GetAllAsync();
-            var coordinatorCourses = allCourses.Where(c => c.CreatorId == coordinatorId);
+            var coreDtos = await _courseRepository.GetCourseCategoryAnalyticsAsync(coordinatorId);
 
-            // Apply category filter if specified
-            if (!string.IsNullOrEmpty(categoryId))
+            return coreDtos.Select(dto => new ApplicationCourseCategoryDto
             {
-                coordinatorCourses = coordinatorCourses.Where(c => c.CategoryId == categoryId);
+                Id = dto.Id,
+                Name = dto.Name,
+                Description = dto.Description,
+                TotalCourses = dto.TotalCourses,
+                TotalEnrollments = dto.TotalEnrollments
+            }).ToList();
+        }
+
+        public async Task<DTOs.Course.EnrollmentAnalyticsResponse> GetEnrollmentAnalyticsAsync(string coordinatorId, string? categoryId, string status, string ownership)
+        {
+            var creatorIdFilter = ownership.Equals("mine", StringComparison.OrdinalIgnoreCase) ? coordinatorId : null;
+
+            var courses = (await _courseRepository.GetCoursesByCreatorIdAsync(creatorIdFilter, categoryId)).ToList();
+            var courseIds = courses.Select(c => c.Id).ToList();
+
+            var categories = await GetCourseCategoriesAsync(coordinatorId);
+
+            if (!courseIds.Any())
+            {
+                return new DTOs.Course.EnrollmentAnalyticsResponse { Categories = categories, Enrollments = new List<DTOs.Course.EnrollmentAnalyticsDto>() };
             }
 
-            var coursesList = coordinatorCourses.ToList();
-            var enrollmentsList = new List<EnrollmentAnalyticsDto>();
+            var allEnrollmentsForCourses = (await _enrollmentRepository.GetEnrollmentsByCourseIdsAsync(courseIds)).ToList();
+            var enrollmentsByCourseId = allEnrollmentsForCourses.GroupBy(e => e.CourseId).ToDictionary(g => g.Key, g => g.ToList());
 
-            // Process each course
-            foreach (var course in coursesList)
+            var enrollmentsDtoList = new List<DTOs.Course.EnrollmentAnalyticsDto>();
+            foreach (var course in courses)
             {
-                var enrollments = await _enrollmentRepository.GetEnrollmentsByCourseIdAsync(course.Id);
-                var enrollmentList = enrollments.ToList();
+                var enrollmentsForCourse = enrollmentsByCourseId.GetValueOrDefault(course.Id, new List<Enrollment>());
 
-                // Calculate enrollment counts
-                var totalEnrollments = enrollmentList.Count;
-                var ongoingEnrollments = enrollmentList.Count(e =>
-                    e.Status.Equals("active", StringComparison.OrdinalIgnoreCase) ||
-                    e.Status.Equals("ongoing", StringComparison.OrdinalIgnoreCase) ||
-                    e.Status.Equals("inprogress", StringComparison.OrdinalIgnoreCase));
-                var completedEnrollments = enrollmentList.Count(e =>
-                    e.Status.Equals("completed", StringComparison.OrdinalIgnoreCase));
+                var ongoingCount = enrollmentsForCourse.Count(e => e.CompletionDate == null);
+                var completedCount = enrollmentsForCourse.Count(e => e.CompletionDate != null);
 
-                // Create enrollment analytics DTO
-                var enrollmentDto = new EnrollmentAnalyticsDto
+                var enrollmentDto = new DTOs.Course.EnrollmentAnalyticsDto
                 {
                     CourseId = course.Id,
                     Course = course.Title,
-                    ShortCourseName = TruncateCourseName(course.Title),
+                    ShortCourseName = TruncateName(course.Title),
                     CategoryId = course.CategoryId,
                     CategoryName = course.Category?.Title ?? "Unknown",
-                    TotalEnrollments = totalEnrollments,
-                    OngoingEnrollments = ongoingEnrollments,
-                    CompletedEnrollments = completedEnrollments,
+                    TotalEnrollments = enrollmentsForCourse.Count,
+                    OngoingEnrollments = ongoingCount,
+                    CompletedEnrollments = completedCount,
                     CoordinatorId = course.CreatorId,
                     CoordinatorName = course.Creator?.Name ?? "Unknown"
                 };
 
-                enrollmentsList.Add(enrollmentDto);
+                if (status.Equals("ongoing", StringComparison.OrdinalIgnoreCase) && enrollmentDto.OngoingEnrollments > 0)
+                {
+                    enrollmentsDtoList.Add(enrollmentDto);
+                }
+                else if (status.Equals("completed", StringComparison.OrdinalIgnoreCase) && enrollmentDto.CompletedEnrollments > 0)
+                {
+                    enrollmentsDtoList.Add(enrollmentDto);
+                }
+                else if (status.Equals("all", StringComparison.OrdinalIgnoreCase))
+                {
+                    enrollmentsDtoList.Add(enrollmentDto);
+                }
             }
 
-            // Apply status filter for display
-            var filteredEnrollments = FilterEnrollmentsByStatus(enrollmentsList, status);
-
-            // Get categories
-            var categories = await GetCourseCategoriesAsync(coordinatorId);
-
-            // Calculate total stats
-            var totalStats = new EnrollmentStatsDto
+            var totalStats = new DTOs.Course.EnrollmentStatsDto
             {
-                TotalCourses = enrollmentsList.Count,
-                TotalEnrollments = enrollmentsList.Sum(e => e.TotalEnrollments),
-                TotalOngoing = enrollmentsList.Sum(e => e.OngoingEnrollments),
-                TotalCompleted = enrollmentsList.Sum(e => e.CompletedEnrollments)
+                TotalCourses = enrollmentsDtoList.Count,
+                TotalEnrollments = enrollmentsDtoList.Sum(e => status.Equals("ongoing", StringComparison.OrdinalIgnoreCase) ? e.OngoingEnrollments : status.Equals("completed", StringComparison.OrdinalIgnoreCase) ? e.CompletedEnrollments : e.TotalEnrollments),
+                TotalOngoing = enrollmentsDtoList.Sum(e => e.OngoingEnrollments),
+                TotalCompleted = enrollmentsDtoList.Sum(e => e.CompletedEnrollments)
             };
 
-            return new EnrollmentAnalyticsResponse
+            return new DTOs.Course.EnrollmentAnalyticsResponse
             {
-                Enrollments = filteredEnrollments,
+                Enrollments = enrollmentsDtoList,
                 Categories = categories,
                 TotalStats = totalStats
             };
         }
 
-        public async Task<List<CourseCategoryAnalyticsDto>> GetCourseCategoriesAsync(string coordinatorId)
+        public async Task<List<DTOs.Course.CoordinatorCourseAnalyticsDto>> GetCoordinatorCoursesAsync(string coordinatorId, string? categoryId, string ownership)
         {
-            var allCategories = await _courseCategoryRepository.GetAllCategoriesAsync();
-            var allCourses = await _courseRepository.GetAllAsync();
-            var coordinatorCourses = allCourses.Where(c => c.CreatorId == coordinatorId).ToList();
+            var creatorIdFilter = ownership.Equals("mine", StringComparison.OrdinalIgnoreCase) ? coordinatorId : null;
+            var courses = (await _courseRepository.GetCoursesByCreatorIdAsync(creatorIdFilter, categoryId)).ToList();
+            var courseIds = courses.Select(c => c.Id).ToList();
 
-            var categoryAnalytics = new List<CourseCategoryAnalyticsDto>();
+            if (!courseIds.Any()) return new List<DTOs.Course.CoordinatorCourseAnalyticsDto>();
 
-            foreach (var category in allCategories.Where(c => c.Status == "active"))
+            var enrollments = (await _enrollmentRepository.GetEnrollmentsByCourseIdsAsync(courseIds)).ToList();
+            var enrollmentsByCourseId = enrollments.GroupBy(e => e.CourseId).ToDictionary(g => g.Key, g => g.ToList());
+
+            return courses.Select(course =>
             {
-                var coursesInCategory = coordinatorCourses.Where(c => c.CategoryId == category.Id).ToList();
-
-                if (coursesInCategory.Any()) // Only include categories with coordinator's courses
-                {
-                    var totalEnrollments = 0;
-                    foreach (var course in coursesInCategory)
-                    {
-                        var enrollments = await _enrollmentRepository.GetEnrollmentsByCourseIdAsync(course.Id);
-                        totalEnrollments += enrollments.Count();
-                    }
-
-                    categoryAnalytics.Add(new CourseCategoryAnalyticsDto
-                    {
-                        Id = category.Id,
-                        Name = category.Title,
-                        Description = category.Description,
-                        TotalCourses = coursesInCategory.Count,
-                        TotalEnrollments = totalEnrollments
-                    });
-                }
-            }
-
-            return categoryAnalytics;
-        }
-
-        public async Task<List<CoordinatorCourseAnalyticsDto>> GetCoordinatorCoursesAsync(string coordinatorId, string? categoryId = null)
-        {
-            var allCourses = await _courseRepository.GetAllAsync();
-            var coordinatorCourses = allCourses.Where(c => c.CreatorId == coordinatorId);
-
-            // Apply category filter if specified
-            if (!string.IsNullOrEmpty(categoryId))
-            {
-                coordinatorCourses = coordinatorCourses.Where(c => c.CategoryId == categoryId);
-            }
-
-            var courseAnalytics = new List<CoordinatorCourseAnalyticsDto>();
-
-            foreach (var course in coordinatorCourses)
-            {
-                var enrollments = await _enrollmentRepository.GetEnrollmentsByCourseIdAsync(course.Id);
-                var enrollmentList = enrollments.ToList();
-
-                var totalEnrollments = enrollmentList.Count;
-                var ongoingEnrollments = enrollmentList.Count(e =>
-                    e.Status.Equals("active", StringComparison.OrdinalIgnoreCase) ||
-                    e.Status.Equals("ongoing", StringComparison.OrdinalIgnoreCase) ||
-                    e.Status.Equals("inprogress", StringComparison.OrdinalIgnoreCase));
-                var completedEnrollments = enrollmentList.Count(e =>
-                    e.Status.Equals("completed", StringComparison.OrdinalIgnoreCase));
-
-                courseAnalytics.Add(new CoordinatorCourseAnalyticsDto
+                var enrollmentsForCourse = enrollmentsByCourseId.GetValueOrDefault(course.Id, new List<Enrollment>());
+                return new DTOs.Course.CoordinatorCourseAnalyticsDto
                 {
                     CourseId = course.Id,
                     CourseTitle = course.Title,
-                    ShortTitle = TruncateCourseName(course.Title),
+                    ShortTitle = TruncateName(course.Title),
                     CategoryId = course.CategoryId,
                     CategoryName = course.Category?.Title ?? "Unknown",
-                    TotalEnrollments = totalEnrollments,
-                    OngoingEnrollments = ongoingEnrollments,
-                    CompletedEnrollments = completedEnrollments,
-                    IsCreatedByCurrentCoordinator = true
-                });
-            }
-
-            return courseAnalytics;
+                    TotalEnrollments = enrollmentsForCourse.Count,
+                    OngoingEnrollments = enrollmentsForCourse.Count(e => e.CompletionDate == null),
+                    CompletedEnrollments = enrollmentsForCourse.Count(e => e.CompletionDate != null),
+                    IsCreatedByCurrentCoordinator = course.CreatorId == coordinatorId
+                };
+            }).ToList();
         }
 
-        public async Task<List<CourseQuizAnalyticsDto>> GetQuizzesForCourseAsync(int courseId, string coordinatorId)
+        public async Task<List<DTOs.Course.CourseQuizAnalyticsDto>> GetQuizzesForCourseAsync(int courseId, string coordinatorId)
         {
-            // Verify the course belongs to the coordinator
             var course = await _courseRepository.GetByIdAsync(courseId);
-            if (course == null || course.CreatorId != coordinatorId)
+            if (course == null) // A course coordinator can view quizzes for any course. Ownership is checked on performance.
             {
-                return new List<CourseQuizAnalyticsDto>();
+                return new List<DTOs.Course.CourseQuizAnalyticsDto>();
             }
 
-            // Get lessons for the course
-            var lessons = await _lessonRepository.GetByCourseIdAsync(courseId);
-            var lessonIds = lessons.Select(l => l.Id).ToList();
+            var quizzes = (await _quizRepository.GetQuizzesByCourseIdAsync(courseId)).ToList();
+            if (!quizzes.Any()) return new List<DTOs.Course.CourseQuizAnalyticsDto>();
 
-            if (!lessonIds.Any())
+            var quizIds = quizzes.Select(q => q.QuizId).ToList();
+            var allAttempts = (await _quizAttemptRepository.GetCompletedAttemptsByQuizIdsAsync(quizIds)).ToList();
+            var attemptsByQuizId = allAttempts.GroupBy(a => a.QuizId).ToDictionary(g => g.Key, g => g.ToList());
+
+            return quizzes.Select(quiz =>
             {
-                return new List<CourseQuizAnalyticsDto>();
-            }
-
-            // Get quizzes for all lessons in the course
-            var quizzes = await _quizRepository.GetQuizzesByLessonIdsAsync(lessonIds);
-            var quizAnalytics = new List<CourseQuizAnalyticsDto>();
-
-            foreach (var quiz in quizzes)
-            {
-                var attempts = await _quizAttemptRepository.GetAttemptsByQuizIdAsync(quiz.QuizId);
-                var attemptsList = attempts.ToList();
-
-                var totalAttempts = attemptsList.Count;
-                var averageScore = attemptsList.Any() && attemptsList.Any(a => a.Score.HasValue)
-                    ? attemptsList.Where(a => a.Score.HasValue).Average(a => a.Score!.Value)
+                var attempts = attemptsByQuizId.GetValueOrDefault(quiz.QuizId, new List<QuizAttempt>());
+                var averageScore = attempts.Any() && quiz.TotalMarks > 0
+                    ? (attempts.Average(a => a.Score ?? 0) / (double)quiz.TotalMarks) * 100
                     : 0;
 
-                quizAnalytics.Add(new CourseQuizAnalyticsDto
+                return new DTOs.Course.CourseQuizAnalyticsDto
                 {
                     QuizId = quiz.QuizId,
                     QuizTitle = quiz.QuizTitle,
                     CourseId = courseId,
                     CourseTitle = course.Title,
-                    TotalAttempts = totalAttempts,
+                    TotalAttempts = attempts.Count,
                     AverageScore = (decimal)averageScore,
-                    IsCreatedByCurrentCoordinator = true
-                });
-            }
-
-            return quizAnalytics;
+                    IsCreatedByCurrentCoordinator = course.CreatorId == coordinatorId
+                };
+            }).ToList();
         }
 
-        public async Task<QuizPerformanceAnalyticsResponse> GetQuizPerformanceAsync(int quizId, string coordinatorId)
+        public async Task<DTOs.Course.QuizPerformanceAnalyticsResponse> GetQuizPerformanceAsync(int quizId, string coordinatorId)
         {
-            // Get quiz and verify ownership
             var quiz = await _quizRepository.GetQuizByIdAsync(quizId);
-            if (quiz == null)
+            // Any coordinator can see any quiz performance, so no ownership check here.
+            if (quiz?.Lesson?.Course == null)
             {
-                throw new UnauthorizedAccessException("Quiz not found.");
+                throw new KeyNotFoundException("Quiz or its associated course not found.");
             }
 
-            // Get lesson and course to verify coordinator ownership
-            var lesson = await _lessonRepository.GetByIdAsync(quiz.LessonId);
-            if (lesson == null)
-            {
-                throw new UnauthorizedAccessException("Lesson not found.");
-            }
+            var attempts = (await _quizAttemptRepository.GetCompletedAttemptsByQuizIdAsync(quizId))
+                           .Where(a => a.Score.HasValue).ToList();
 
-            var course = await _courseRepository.GetByIdAsync(lesson.CourseId);
-            if (course == null || course.CreatorId != coordinatorId)
-            {
-                throw new UnauthorizedAccessException("You don't have permission to view this quiz performance.");
-            }
+            var totalValidAttempts = attempts.Count;
+            if (totalValidAttempts == 0) return new DTOs.Course.QuizPerformanceAnalyticsResponse();
 
-            // Get quiz attempts
-            var attempts = await _quizAttemptRepository.GetAttemptsByQuizIdAsync(quizId);
-            var completedAttempts = attempts.Where(a => a.IsCompleted && a.Score.HasValue).ToList();
+            var performanceData = GetMarkRangeAnalytics(attempts, quiz.TotalMarks);
 
-            var totalAttempts = completedAttempts.Count;
-
-            // Create mark ranges with proper intervals
-            var markRanges = GetMarkRangeAnalytics(completedAttempts, quiz.TotalMarks);
-
-            // Calculate quiz statistics
-            var averageScore = completedAttempts.Any()
-                ? completedAttempts.Average(a => a.Score!.Value)
+            double averageScore = quiz.TotalMarks > 0
+                ? (attempts.Average(a => a.Score!.Value) / (double)quiz.TotalMarks) * 100
                 : 0;
 
-            var normalizedAverage = quiz.TotalMarks > 0
-                ? (averageScore / quiz.TotalMarks) * 100
-                : 0;
+            var passMark = 60;
+            var passCount = attempts.Count(a => (a.Score!.Value / (double)quiz.TotalMarks) * 100 >= passMark);
+            var passRate = totalValidAttempts > 0 ? (decimal)passCount / totalValidAttempts * 100 : 0;
 
-            var passCount = completedAttempts.Count(a => {
-                var normalizedScore = quiz.TotalMarks > 0 ? (a.Score!.Value / quiz.TotalMarks) * 100 : 0;
-                return normalizedScore >= 60;
-            });
-
-            var passRate = totalAttempts > 0 ? (decimal)passCount / totalAttempts * 100 : 0;
-
-            var quizStats = new QuizStatsDto
+            return new DTOs.Course.QuizPerformanceAnalyticsResponse
             {
-                TotalAttempts = totalAttempts,
-                AverageScore = (decimal)normalizedAverage,
-                PassRate = passRate
-            };
-
-            return new QuizPerformanceAnalyticsResponse
-            {
-                PerformanceData = markRanges,
-                QuizStats = quizStats
-            };
-        }
-
-        #endregion
-
-        #region Original Methods (Backward Compatibility)
-
-        public async Task<IEnumerable<CourseEnrollmentAnalyticsDto>> GetEnrollmentAnalyticsSimpleAsync(string coordinatorId)
-        {
-            var allCourses = await _courseRepository.GetAllAsync();
-            var coordinatorCourses = allCourses.Where(c => c.CreatorId == coordinatorId).ToList();
-            var analyticsData = new List<CourseEnrollmentAnalyticsDto>();
-
-            foreach (var course in coordinatorCourses)
-            {
-                var enrollments = await _enrollmentRepository.GetEnrollmentsByCourseIdAsync(course.Id);
-                var enrollmentCount = enrollments.Count(e => e.Status.Equals("active", StringComparison.OrdinalIgnoreCase));
-
-                analyticsData.Add(new CourseEnrollmentAnalyticsDto
+                PerformanceData = performanceData,
+                QuizStats = new DTOs.Course.QuizStatsDto
                 {
-                    course = course.Title,
-                    count = enrollmentCount
-                });
-            }
-            return analyticsData;
-        }
-
-        public async Task<IEnumerable<CoordinatorCourseDto>> GetCoordinatorCoursesSimpleAsync(string coordinatorId)
-        {
-            var allCourses = await _courseRepository.GetAllAsync();
-            var coordinatorCourses = allCourses.Where(c => c.CreatorId == coordinatorId);
-
-            return coordinatorCourses.Select(c => new CoordinatorCourseDto
-            {
-                CourseId = c.Id,
-                CourseTitle = c.Title
-            }).ToList();
-        }
-
-        public async Task<IEnumerable<CourseQuizDto>> GetQuizzesForCourseSimpleAsync(int courseId, string coordinatorId)
-        {
-            var course = await _courseRepository.GetByIdAsync(courseId);
-            if (course == null || course.CreatorId != coordinatorId)
-            {
-                return Enumerable.Empty<CourseQuizDto>();
-            }
-
-            var lessons = await _lessonRepository.GetByCourseIdAsync(courseId);
-            var lessonIds = lessons.Select(l => l.Id).ToList();
-
-            if (!lessonIds.Any())
-            {
-                return Enumerable.Empty<CourseQuizDto>();
-            }
-
-            var quizzes = await _quizRepository.GetQuizzesByLessonIdsAsync(lessonIds);
-
-            return quizzes.Select(q => new CourseQuizDto
-            {
-                QuizId = q.QuizId,
-                QuizTitle = q.QuizTitle
-            }).ToList();
-        }
-
-        public async Task<IEnumerable<MarkRangeDataDto>> GetQuizPerformanceSimpleAsync(int quizId, string coordinatorId)
-        {
-            var quiz = await _quizRepository.GetQuizByIdAsync(quizId);
-            if (quiz == null) return Enumerable.Empty<MarkRangeDataDto>();
-
-            var lesson = await _lessonRepository.GetByIdAsync(quiz.LessonId);
-            if (lesson == null) return Enumerable.Empty<MarkRangeDataDto>();
-
-            var course = await _courseRepository.GetByIdAsync(lesson.CourseId);
-            if (course == null || course.CreatorId != coordinatorId)
-            {
-                return Enumerable.Empty<MarkRangeDataDto>();
-            }
-
-            var attempts = await _quizAttemptRepository.GetAttemptsByQuizIdAsync(quizId);
-            var completedAttempts = attempts.Where(a => a.IsCompleted && a.Score.HasValue).ToList();
-
-            if (!completedAttempts.Any()) return Enumerable.Empty<MarkRangeDataDto>();
-
-            var ranges = new List<MarkRangeDataDto>
-            {
-                new MarkRangeDataDto { range = "0-20", count = 0 },
-                new MarkRangeDataDto { range = "21-40", count = 0 },
-                new MarkRangeDataDto { range = "41-60", count = 0 },
-                new MarkRangeDataDto { range = "61-80", count = 0 },
-                new MarkRangeDataDto { range = "81-100", count = 0 }
-            };
-
-            var totalMarks = quiz.TotalMarks > 0 ? quiz.TotalMarks : 100;
-
-            foreach (var attempt in completedAttempts)
-            {
-                var score = attempt.Score!.Value;
-                double normalizedScore = ((double)score / totalMarks) * 100;
-
-                if (normalizedScore <= 20) ranges[0].count++;
-                else if (normalizedScore <= 40) ranges[1].count++;
-                else if (normalizedScore <= 60) ranges[2].count++;
-                else if (normalizedScore <= 80) ranges[3].count++;
-                else if (normalizedScore <= 100) ranges[4].count++;
-            }
-
-            return ranges;
-        }
-
-        #endregion
-
-        #region Helper Methods
-
-        private static string TruncateCourseName(string courseName, int maxLength = 25)
-        {
-            if (courseName.Length <= maxLength)
-                return courseName;
-
-            return courseName.Substring(0, maxLength - 3) + "...";
-        }
-
-        private List<EnrollmentAnalyticsDto> FilterEnrollmentsByStatus(List<EnrollmentAnalyticsDto> enrollments, string status)
-        {
-            return status.ToLower() switch
-            {
-                "ongoing" => enrollments.Where(e => e.OngoingEnrollments > 0).ToList(),
-                "completed" => enrollments.Where(e => e.CompletedEnrollments > 0).ToList(),
-                _ => enrollments // "all" or any other value
+                    TotalAttempts = totalValidAttempts,
+                    AverageScore = (decimal)averageScore,
+                    PassRate = passRate
+                }
             };
         }
 
-        private List<MarkRangeAnalyticsDto> GetMarkRangeAnalytics(List<QuizAttempt> attempts, int totalMarks)
+        private static string TruncateName(string? name, int maxLength = 30)
         {
-            var ranges = new List<MarkRangeAnalyticsDto>
+            if (string.IsNullOrEmpty(name)) return "N/A";
+            return name.Length <= maxLength ? name : name.Substring(0, maxLength - 3) + "...";
+        }
+
+        private List<DTOs.Course.MarkRangeAnalyticsDto> GetMarkRangeAnalytics(List<QuizAttempt> attempts, int totalMarks)
+        {
+            var ranges = new List<DTOs.Course.MarkRangeAnalyticsDto>
             {
-                new MarkRangeAnalyticsDto { Range = "0-20", MinMark = 0, MaxMark = 20, Count = 0, Percentage = 0 },
-                new MarkRangeAnalyticsDto { Range = "21-40", MinMark = 21, MaxMark = 40, Count = 0, Percentage = 0 },
-                new MarkRangeAnalyticsDto { Range = "41-60", MinMark = 41, MaxMark = 60, Count = 0, Percentage = 0 },
-                new MarkRangeAnalyticsDto { Range = "61-80", MinMark = 61, MaxMark = 80, Count = 0, Percentage = 0 },
-                new MarkRangeAnalyticsDto { Range = "81-100", MinMark = 81, MaxMark = 100, Count = 0, Percentage = 0 }
+                new() { Range = "0-20", MinMark = 0, MaxMark = 20 },
+                new() { Range = "21-40", MinMark = 21, MaxMark = 40 },
+                new() { Range = "41-60", MinMark = 41, MaxMark = 60 },
+                new() { Range = "61-80", MinMark = 61, MaxMark = 80 },
+                new() { Range = "81-100", MinMark = 81, MaxMark = 100 }
             };
 
             if (!attempts.Any()) return ranges;
 
             var validTotalMarks = totalMarks > 0 ? totalMarks : 100;
-
             foreach (var attempt in attempts)
             {
-                var score = attempt.Score!.Value;
-                var normalizedScore = (score / (double)validTotalMarks) * 100;
-
+                var normalizedScore = (attempt.Score!.Value / (double)validTotalMarks) * 100;
                 if (normalizedScore <= 20) ranges[0].Count++;
                 else if (normalizedScore <= 40) ranges[1].Count++;
                 else if (normalizedScore <= 60) ranges[2].Count++;
@@ -449,16 +245,9 @@ namespace ExcellyGenLMS.Application.Services.Course
                 else ranges[4].Count++;
             }
 
-            // Calculate percentages
             var totalAttempts = attempts.Count;
-            foreach (var range in ranges)
-            {
-                range.Percentage = totalAttempts > 0 ? (decimal)range.Count / totalAttempts * 100 : 0;
-            }
-
+            ranges.ForEach(range => range.Percentage = totalAttempts > 0 ? (decimal)range.Count / totalAttempts * 100 : 0);
             return ranges;
         }
-
-        #endregion
     }
 }

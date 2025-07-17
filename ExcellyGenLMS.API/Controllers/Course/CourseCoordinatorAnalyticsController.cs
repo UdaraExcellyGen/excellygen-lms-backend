@@ -1,11 +1,10 @@
-// ExcellyGenLMS.API/Controllers/Course/CourseCoordinatorAnalyticsController.cs
 using ExcellyGenLMS.Application.Interfaces.Course;
-using ExcellyGenLMS.Application.DTOs.Course;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 using System.Threading.Tasks;
+using System;
 
 namespace ExcellyGenLMS.API.Controllers.Course
 {
@@ -30,13 +29,11 @@ namespace ExcellyGenLMS.API.Controllers.Course
             return _httpContextAccessor.HttpContext?.User?.FindFirstValue(ClaimTypes.NameIdentifier);
         }
 
-        /// <summary>
-        /// Get enrollment analytics with optional category and status filtering
-        /// </summary>
         [HttpGet("enrollments")]
         public async Task<IActionResult> GetEnrollmentAnalytics(
             [FromQuery] string? categoryId = null,
-            [FromQuery] string status = "all")
+            [FromQuery] string status = "all",
+            [FromQuery] string ownership = "mine")
         {
             var coordinatorId = GetCurrentUserId();
             if (string.IsNullOrEmpty(coordinatorId))
@@ -46,7 +43,7 @@ namespace ExcellyGenLMS.API.Controllers.Course
 
             try
             {
-                var data = await _analyticsService.GetEnrollmentAnalyticsAsync(coordinatorId, categoryId, status);
+                var data = await _analyticsService.GetEnrollmentAnalyticsAsync(coordinatorId, categoryId, status, ownership);
                 return Ok(data);
             }
             catch (Exception ex)
@@ -55,9 +52,6 @@ namespace ExcellyGenLMS.API.Controllers.Course
             }
         }
 
-        /// <summary>
-        /// Get all course categories available to the coordinator
-        /// </summary>
         [HttpGet("categories")]
         public async Task<IActionResult> GetCourseCategories()
         {
@@ -78,12 +72,10 @@ namespace ExcellyGenLMS.API.Controllers.Course
             }
         }
 
-        /// <summary>
-        /// Get courses created by current coordinator with optional category filtering
-        /// </summary>
         [HttpGet("courses")]
         public async Task<IActionResult> GetCoordinatorCourses(
-            [FromQuery] string? categoryId = null)
+            [FromQuery] string? categoryId = null,
+            [FromQuery] string ownership = "mine")
         {
             var coordinatorId = GetCurrentUserId();
             if (string.IsNullOrEmpty(coordinatorId))
@@ -93,7 +85,7 @@ namespace ExcellyGenLMS.API.Controllers.Course
 
             try
             {
-                var data = await _analyticsService.GetCoordinatorCoursesAsync(coordinatorId, categoryId);
+                var data = await _analyticsService.GetCoordinatorCoursesAsync(coordinatorId, categoryId, ownership);
                 return Ok(data);
             }
             catch (Exception ex)
@@ -102,9 +94,6 @@ namespace ExcellyGenLMS.API.Controllers.Course
             }
         }
 
-        /// <summary>
-        /// Get quizzes for a specific course (only coordinator's courses)
-        /// </summary>
         [HttpGet("courses/{courseId}/quizzes")]
         public async Task<IActionResult> GetQuizzesForCourse(int courseId)
         {
@@ -125,9 +114,6 @@ namespace ExcellyGenLMS.API.Controllers.Course
             }
         }
 
-        /// <summary>
-        /// Get quiz performance with mark intervals
-        /// </summary>
         [HttpGet("quizzes/{quizId}/performance")]
         public async Task<IActionResult> GetQuizPerformance(int quizId)
         {

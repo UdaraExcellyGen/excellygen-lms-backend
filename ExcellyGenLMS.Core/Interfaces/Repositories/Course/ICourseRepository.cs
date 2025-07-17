@@ -1,4 +1,3 @@
-// ExcellyGenLMS.Core/Interfaces/Repositories/Course/ICourseRepository.cs
 using ExcellyGenLMS.Core.Entities.Course;
 using System;
 using System.Collections.Generic;
@@ -6,6 +5,15 @@ using System.Threading.Tasks;
 
 namespace ExcellyGenLMS.Core.Interfaces.Repositories.Course
 {
+    public class CourseCategoryAnalyticsDto
+    {
+        public string Id { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public int TotalCourses { get; set; }
+        public int TotalEnrollments { get; set; }
+    }
+
     public interface ICourseRepository
     {
         Task<Core.Entities.Course.Course?> GetByIdAsync(int id);
@@ -24,9 +32,7 @@ namespace ExcellyGenLMS.Core.Interfaces.Repositories.Course
         Task ClearTechnologiesAsync(int courseId);
         Task<int> GetTotalPublishedCoursesCountAsync();
         Task<TimeSpan?> GetOverallAverageCourseDurationAsync();
-
-        // NEW METHODS FOR ANALYTICS
-        Task<IEnumerable<Core.Entities.Course.Course>> GetCoursesByCreatorIdAsync(string creatorId);
-        Task<IEnumerable<Core.Entities.Course.Course>> GetCoursesByCreatorIdAndCategoryAsync(string creatorId, string categoryId);
+        Task<IEnumerable<Core.Entities.Course.Course>> GetCoursesByCreatorIdAsync(string? creatorId, string? categoryId = null);
+        Task<List<CourseCategoryAnalyticsDto>> GetCourseCategoryAnalyticsAsync(string coordinatorId);
     }
 }
