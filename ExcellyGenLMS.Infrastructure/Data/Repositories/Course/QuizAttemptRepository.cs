@@ -25,7 +25,7 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
                                  .Include(qa => qa.User)
                                  .Include(qa => qa.Answers)
                                      .ThenInclude(a => a.Question)
-                                         .ThenInclude(q => q!.MCQQuestionOptions) // Safe: We filter for non-null questions
+                                         .ThenInclude(q => q!.MCQQuestionOptions)
                                  .Include(qa => qa.Answers)
                                      .ThenInclude(a => a.SelectedOption)
                                  .FirstOrDefaultAsync(qa => qa.QuizAttemptId == attemptId);
@@ -52,9 +52,9 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
         {
             return await _context.QuizAttempts
                                  .Include(qa => qa.User)
-                                 .Include(qa => qa.Quiz)
                                  .Where(qa => qa.QuizId == quizId)
                                  .OrderByDescending(qa => qa.StartTime)
+                                 .AsNoTracking()
                                  .ToListAsync();
         }
 
@@ -87,6 +87,25 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
                 .Where(qa => qa.UserId == userId &&
                              qa.QuizId == quizId &&
                              qa.IsCompleted == true)
+                .AsNoTracking()
+                .ToListAsync();
+        }
+
+        public async Task<IEnumerable<QuizAttempt>> GetCompletedAttemptsByQuizIdAsync(int quizId)
+        {
+            return await _context.QuizAttempts
+                .Where(qa => qa.QuizId == quizId && qa.IsCompleted)
+                .AsNoTracking()
+                .ToListAsync();
+        }
+
+        public async Task<IEnumerable<QuizAttempt>> GetCompletedAttemptsByQuizIdsAsync(List<int> quizIds)
+        {
+            if (quizIds == null || !quizIds.Any()) return new List<QuizAttempt>();
+
+            return await _context.QuizAttempts
+                .Where(qa => quizIds.Contains(qa.QuizId) && qa.IsCompleted)
+                .AsNoTracking()
                 .ToListAsync();
         }
 
@@ -101,6 +120,7 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
                 .Where(qa => qa.UserId == userId &&
                              quizIds.Contains(qa.QuizId) &&
                              qa.IsCompleted == true)
+                .AsNoTracking()
                 .ToListAsync();
         }
 

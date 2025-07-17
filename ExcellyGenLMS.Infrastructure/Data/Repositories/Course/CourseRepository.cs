@@ -160,5 +160,46 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
                 .AverageAsync();
             return averageHours.HasValue ? TimeSpan.FromHours(averageHours.Value) : (TimeSpan?)null;
         }
+
+        public async Task<IEnumerable<Core.Entities.Course.Course>> GetCoursesByCreatorIdAsync(string? creatorId, string? categoryId = null)
+        {
+            var query = _context.Courses
+                .Include(c => c.Category)
+                .Include(c => c.Creator)
+                .AsNoTracking();
+
+            if (!string.IsNullOrEmpty(creatorId))
+            {
+                query = query.Where(c => c.CreatorId == creatorId);
+            }
+
+            if (!string.IsNullOrEmpty(categoryId))
+            {
+                query = query.Where(c => c.CategoryId == categoryId);
+            }
+
+            return await query.OrderBy(c => c.Title).ToListAsync();
+        }
+
+        public async Task<List<Core.Interfaces.Repositories.Course.CourseCategoryAnalyticsDto>> GetCourseCategoryAnalyticsAsync(string coordinatorId)
+        {
+            return await _context.CourseCategories
+                .AsNoTracking()
+                .Where(cat => cat.Status == "active" && cat.Courses.Any(c => c.CreatorId == coordinatorId))
+                .Select(cat => new Core.Interfaces.Repositories.Course.CourseCategoryAnalyticsDto
+                {
+                    Id = cat.Id,
+                    Name = cat.Title,
+                    Description = cat.Description,
+                    TotalCourses = cat.Courses.Count(c => c.CreatorId == coordinatorId),
+                    TotalEnrollments = cat.Courses
+                                        .Where(c => c.CreatorId == coordinatorId)
+                                        .SelectMany(c => c.Enrollments)
+                                        .Count()
+                })
+                .Where(dto => dto.TotalCourses > 0)
+                .OrderBy(dto => dto.Name)
+                .ToListAsync();
+        }
     }
 }

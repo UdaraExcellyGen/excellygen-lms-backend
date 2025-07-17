@@ -1,14 +1,14 @@
-// ExcellyGenLMS.API/Controllers/course/CourseCoordinatorAnalyticsController.cs
 using ExcellyGenLMS.Application.Interfaces.Course;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 using System.Threading.Tasks;
+using System;
 
 namespace ExcellyGenLMS.API.Controllers.Course
 {
-    [Authorize(Roles = "CourseCoordinator")] 
+    [Authorize(Roles = "CourseCoordinator")]
     [Route("api/coordinator-analytics")]
     [ApiController]
     public class CourseCoordinatorAnalyticsController : ControllerBase
@@ -16,7 +16,9 @@ namespace ExcellyGenLMS.API.Controllers.Course
         private readonly ICourseCoordinatorAnalyticsService _analyticsService;
         private readonly IHttpContextAccessor _httpContextAccessor;
 
-        public CourseCoordinatorAnalyticsController(ICourseCoordinatorAnalyticsService analyticsService, IHttpContextAccessor httpContextAccessor)
+        public CourseCoordinatorAnalyticsController(
+            ICourseCoordinatorAnalyticsService analyticsService,
+            IHttpContextAccessor httpContextAccessor)
         {
             _analyticsService = analyticsService;
             _httpContextAccessor = httpContextAccessor;
@@ -28,27 +30,68 @@ namespace ExcellyGenLMS.API.Controllers.Course
         }
 
         [HttpGet("enrollments")]
-        public async Task<IActionResult> GetEnrollmentAnalytics()
+        public async Task<IActionResult> GetEnrollmentAnalytics(
+            [FromQuery] string? categoryId = null,
+            [FromQuery] string status = "all",
+            [FromQuery] string ownership = "mine")
         {
             var coordinatorId = GetCurrentUserId();
             if (string.IsNullOrEmpty(coordinatorId))
             {
                 return Unauthorized("User ID not found.");
             }
-            var data = await _analyticsService.GetEnrollmentAnalyticsAsync(coordinatorId);
-            return Ok(data);
+
+            try
+            {
+                var data = await _analyticsService.GetEnrollmentAnalyticsAsync(coordinatorId, categoryId, status, ownership);
+                return Ok(data);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpGet("categories")]
+        public async Task<IActionResult> GetCourseCategories()
+        {
+            var coordinatorId = GetCurrentUserId();
+            if (string.IsNullOrEmpty(coordinatorId))
+            {
+                return Unauthorized("User ID not found.");
+            }
+
+            try
+            {
+                var categories = await _analyticsService.GetCourseCategoriesAsync(coordinatorId);
+                return Ok(categories);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
 
         [HttpGet("courses")]
-        public async Task<IActionResult> GetCoordinatorCourses()
+        public async Task<IActionResult> GetCoordinatorCourses(
+            [FromQuery] string? categoryId = null,
+            [FromQuery] string ownership = "mine")
         {
             var coordinatorId = GetCurrentUserId();
             if (string.IsNullOrEmpty(coordinatorId))
             {
                 return Unauthorized("User ID not found.");
             }
-            var data = await _analyticsService.GetCoordinatorCoursesAsync(coordinatorId);
-            return Ok(data);
+
+            try
+            {
+                var data = await _analyticsService.GetCoordinatorCoursesAsync(coordinatorId, categoryId, ownership);
+                return Ok(data);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
 
         [HttpGet("courses/{courseId}/quizzes")]
@@ -59,8 +102,16 @@ namespace ExcellyGenLMS.API.Controllers.Course
             {
                 return Unauthorized("User ID not found.");
             }
-            var data = await _analyticsService.GetQuizzesForCourseAsync(courseId, coordinatorId);
-            return Ok(data);
+
+            try
+            {
+                var data = await _analyticsService.GetQuizzesForCourseAsync(courseId, coordinatorId);
+                return Ok(data);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
 
         [HttpGet("quizzes/{quizId}/performance")]
@@ -71,8 +122,16 @@ namespace ExcellyGenLMS.API.Controllers.Course
             {
                 return Unauthorized("User ID not found.");
             }
-            var data = await _analyticsService.GetQuizPerformanceAsync(quizId, coordinatorId);
-            return Ok(data);
+
+            try
+            {
+                var data = await _analyticsService.GetQuizPerformanceAsync(quizId, coordinatorId);
+                return Ok(data);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
     }
 }

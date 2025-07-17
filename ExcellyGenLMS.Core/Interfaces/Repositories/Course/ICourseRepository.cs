@@ -5,6 +5,15 @@ using System.Threading.Tasks;
 
 namespace ExcellyGenLMS.Core.Interfaces.Repositories.Course
 {
+    public class CourseCategoryAnalyticsDto
+    {
+        public string Id { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public int TotalCourses { get; set; }
+        public int TotalEnrollments { get; set; }
+    }
+
     public interface ICourseRepository
     {
         Task<Core.Entities.Course.Course?> GetByIdAsync(int id);
@@ -12,7 +21,7 @@ namespace ExcellyGenLMS.Core.Interfaces.Repositories.Course
         Task<IEnumerable<Core.Entities.Course.Course>> GetAllAsync();
         Task<IEnumerable<Core.Entities.Course.Course>> GetAllPublishedCoursesWithDetailsAsync();
         Task<IEnumerable<Lesson>> GetLessonsByCourseIdAsync(int courseId);
-        Task<IEnumerable<Lesson>> GetLessonsByCourseIdsAsync(List<int> courseIds); // This method is needed
+        Task<IEnumerable<Lesson>> GetLessonsByCourseIdsAsync(List<int> courseIds);
         Task<Lesson?> GetLessonWithDocumentsAsync(int lessonId);
         Task<Core.Entities.Course.Course> AddAsync(Core.Entities.Course.Course course);
         Task UpdateAsync(Core.Entities.Course.Course course);
@@ -23,5 +32,7 @@ namespace ExcellyGenLMS.Core.Interfaces.Repositories.Course
         Task ClearTechnologiesAsync(int courseId);
         Task<int> GetTotalPublishedCoursesCountAsync();
         Task<TimeSpan?> GetOverallAverageCourseDurationAsync();
+        Task<IEnumerable<Core.Entities.Course.Course>> GetCoursesByCreatorIdAsync(string? creatorId, string? categoryId = null);
+        Task<List<CourseCategoryAnalyticsDto>> GetCourseCategoryAnalyticsAsync(string coordinatorId);
     }
 }

@@ -17,32 +17,11 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
             _context = context;
         }
 
-        public async Task UpdateQuizBankAsync(QuizBank quizBank)
-        {
-            try
-            {
-                var existingQuizBank = await _context.QuizBanks
-                    .FirstOrDefaultAsync(qb => qb.QuizBankId == quizBank.QuizBankId);
-
-                if (existingQuizBank == null)
-                {
-                    throw new ArgumentException($"QuizBank with ID {quizBank.QuizBankId} not found.");
-                }
-
-                existingQuizBank.QuizBankSize = quizBank.QuizBankSize;
-
-                await _context.SaveChangesAsync();
-            }
-            catch (Exception)
-            {
-                throw;
-            }
-        }
-
         public async Task<Quiz?> GetQuizByIdAsync(int quizId)
         {
             return await _context.Quizzes
                                  .Include(q => q.Lesson)
+                                    .ThenInclude(l => l!.Course)
                                  .Include(q => q.QuizBank)
                                  .FirstOrDefaultAsync(q => q.QuizId == quizId);
         }
@@ -52,10 +31,10 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
             return await _context.Quizzes
                                  .Where(q => q.LessonId == lessonId)
                                  .Include(q => q.Lesson)
+                                 .AsNoTracking()
                                  .ToListAsync();
         }
 
-        // ADD THIS METHOD IMPLEMENTATION
         public async Task<IEnumerable<Quiz>> GetQuizzesByCourseIdAsync(int courseId)
         {
             return await _context.Quizzes
@@ -65,20 +44,26 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
                 .ToListAsync();
         }
 
+        public async Task<IEnumerable<Quiz>> GetQuizzesByLessonIdsAsync(List<int> lessonIds)
+        {
+            if (lessonIds == null || !lessonIds.Any())
+            {
+                return new List<Quiz>();
+            }
+            return await _context.Quizzes
+                                 .Where(q => lessonIds.Contains(q.LessonId))
+                                 .Include(q => q.Lesson)
+                                 .AsNoTracking()
+                                 .ToListAsync();
+        }
+
+        // Other existing methods...
         public async Task<Quiz?> GetQuizByLessonIdAsync(int lessonId)
         {
             return await _context.Quizzes
                                  .Where(q => q.LessonId == lessonId)
                                  .Include(q => q.Lesson)
                                  .FirstOrDefaultAsync();
-        }
-
-        public async Task<IEnumerable<Quiz>> GetQuizzesByLessonIdsAsync(List<int> lessonIds)
-        {
-            return await _context.Quizzes
-                                 .Where(q => lessonIds.Contains(q.LessonId))
-                                 .Include(q => q.Lesson)
-                                 .ToListAsync();
         }
 
         public async Task<Quiz> CreateQuizAsync(Quiz quiz)
@@ -106,6 +91,19 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
             {
                 throw new ArgumentException($"Quiz with ID {quizId} not found for deletion.");
             }
+        }
+
+        public async Task UpdateQuizBankAsync(QuizBank quizBank)
+        {
+            var existingQuizBank = await _context.QuizBanks
+                .FirstOrDefaultAsync(qb => qb.QuizBankId == quizBank.QuizBankId);
+
+            if (existingQuizBank == null)
+            {
+                throw new ArgumentException($"QuizBank with ID {quizBank.QuizBankId} not found.");
+            }
+            existingQuizBank.QuizBankSize = quizBank.QuizBankSize;
+            await _context.SaveChangesAsync();
         }
 
         public async Task<QuizBank?> GetQuizBankByIdAsync(int quizBankId)
@@ -215,87 +213,36 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
 
         public async Task DeleteOptionAsync(int optionId)
         {
-            try
+            var option = await _context.MCQQuestionOptions.FindAsync(optionId);
+            if (option != null)
             {
-                var option = await _context.MCQQuestionOptions.FindAsync(optionId);
-                if (option != null)
+                bool isUsed = await IsOptionUsedInAttemptsAsync(optionId);
+                if (!isUsed)
                 {
-                    bool isUsed = await IsOptionUsedInAttemptsAsync(optionId);
-                    if (!isUsed)
-                    {
-                        _context.MCQQuestionOptions.Remove(option);
-                        await _context.SaveChangesAsync();
-                    }
-                }
-                else
-                {
-                    throw new ArgumentException($"Option with ID {optionId} not found for deletion.");
+                    _context.MCQQuestionOptions.Remove(option);
+                    await _context.SaveChangesAsync();
                 }
             }
-            catch (DbUpdateException ex) when (ex.InnerException?.Message.Contains("REFERENCE constraint") == true)
+            else
             {
-                Console.WriteLine($"Cannot delete option {optionId} because it's referenced in quiz attempts");
+                throw new ArgumentException($"Option with ID {optionId} not found for deletion.");
             }
         }
 
         public async Task<IEnumerable<QuizBankQuestion>> GetRandomQuestionsForQuizAsync(int quizId, int count)
         {
-            try
-            {
-                Console.WriteLine($"=== GetRandomQuestionsForQuizAsync called for Quiz ID: {quizId}, Count: {count} ===");
+            var quiz = await _context.Quizzes
+                                     .AsNoTracking()
+                                     .FirstOrDefaultAsync(q => q.QuizId == quizId);
 
-                var quiz = await _context.Quizzes
-                                         .AsNoTracking()
-                                         .FirstOrDefaultAsync(q => q.QuizId == quizId);
+            if (quiz == null) return new List<QuizBankQuestion>();
 
-                if (quiz == null)
-                {
-                    Console.WriteLine($"❌ Quiz with ID {quizId} not found");
-                    return new List<QuizBankQuestion>();
-                }
+            var questions = await _context.QuizBankQuestions
+                                          .Where(qbq => qbq.QuizBankId == quiz.QuizBankId)
+                                          .Include(qbq => qbq.MCQQuestionOptions)
+                                          .ToListAsync();
 
-                Console.WriteLine($"✅ Found Quiz: ID={quiz.QuizId}, Title='{quiz.QuizTitle}', QuizBankId={quiz.QuizBankId}");
-
-                var quizBank = await _context.QuizBanks
-                                            .AsNoTracking()
-                                            .FirstOrDefaultAsync(qb => qb.QuizBankId == quiz.QuizBankId);
-
-                if (quizBank == null)
-                {
-                    Console.WriteLine($"❌ QuizBank with ID {quiz.QuizBankId} not found");
-                    return new List<QuizBankQuestion>();
-                }
-
-                Console.WriteLine($"✅ Found QuizBank: ID={quizBank.QuizBankId}, Size={quizBank.QuizBankSize}");
-
-                var questions = await _context.QuizBankQuestions
-                                              .Where(qbq => qbq.QuizBankId == quiz.QuizBankId)
-                                              .Include(qbq => qbq.MCQQuestionOptions)
-                                              .ToListAsync();
-
-                Console.WriteLine($"📊 Found {questions.Count} questions in QuizBank {quiz.QuizBankId}");
-
-                if (questions.Count == 0)
-                {
-                    Console.WriteLine($"❌ No questions found in QuizBank {quiz.QuizBankId} for Quiz {quizId}");
-                    return new List<QuizBankQuestion>();
-                }
-
-                var selectedQuestions = questions
-                                       .OrderBy(q => Guid.NewGuid())
-                                       .Take(count)
-                                       .ToList();
-
-                Console.WriteLine($"✅ Selected {selectedQuestions.Count} random questions for Quiz {quizId}");
-
-                return selectedQuestions;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"💥 Error in GetRandomQuestionsForQuizAsync: {ex.Message}");
-                Console.WriteLine($"Stack trace: {ex.StackTrace}");
-                throw;
-            }
+            return questions.OrderBy(q => Guid.NewGuid()).Take(count).ToList();
         }
 
         public async Task<bool> HasQuizForLessonAsync(int lessonId)

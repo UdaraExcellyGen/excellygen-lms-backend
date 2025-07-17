@@ -22,7 +22,8 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
         {
             return await _context.Enrollments
                                  .Include(e => e.User)
-                                 .Include("Course.Category") // FIX: Using string path to avoid null warnings
+                                 .Include(e => e.Course)
+                                     .ThenInclude(c => c!.Category)
                                  .ToListAsync();
         }
 
@@ -30,7 +31,8 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
         {
             return await _context.Enrollments
                                  .Include(e => e.User)
-                                 .Include("Course.Category") // FIX: Using string path to avoid null warnings
+                                 .Include(e => e.Course)
+                                     .ThenInclude(c => c!.Category)
                                  .FirstOrDefaultAsync(e => e.Id == id);
         }
 
@@ -38,7 +40,8 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
         {
             return await _context.Enrollments
                                  .Include(e => e.User)
-                                 .Include("Course.Category") // FIX: Using string path to avoid null warnings
+                                 .Include(e => e.Course)
+                                     .ThenInclude(c => c!.Category)
                                  .FirstOrDefaultAsync(e => e.UserId == userId && e.CourseId == courseId);
         }
 
@@ -47,7 +50,8 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
             return await _context.Enrollments
                                  .Where(e => e.UserId == userId)
                                  .Include(e => e.User)
-                                 .Include("Course.Category") // FIX: Using string path to avoid null warnings
+                                 .Include(e => e.Course)
+                                     .ThenInclude(c => c!.Category)
                                  .ToListAsync();
         }
 
@@ -56,7 +60,20 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
             return await _context.Enrollments
                                  .Where(e => e.CourseId == courseId)
                                  .Include(e => e.User)
-                                 .Include("Course.Category") // FIX: Using string path to avoid null warnings
+                                 .AsNoTracking()
+                                 .ToListAsync();
+        }
+
+        public async Task<List<Enrollment>> GetEnrollmentsByCourseIdsAsync(List<int> courseIds)
+        {
+            if (courseIds == null || !courseIds.Any())
+            {
+                return new List<Enrollment>();
+            }
+
+            return await _context.Enrollments
+                                 .Where(e => courseIds.Contains(e.CourseId))
+                                 .AsNoTracking()
                                  .ToListAsync();
         }
 
