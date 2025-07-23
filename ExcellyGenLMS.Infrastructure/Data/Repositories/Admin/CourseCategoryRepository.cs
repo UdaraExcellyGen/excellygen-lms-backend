@@ -105,5 +105,28 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Admin
             var averageHours = courses.Average(c => (double?)c.EstimatedTime);
             return averageHours.HasValue ? TimeSpan.FromHours(averageHours.Value) : null;
         }
+
+        // NEW METHOD: Check if user has active enrollments in this category
+        public async Task<bool> HasActiveEnrollmentsAsync(string categoryId, string userId)
+        {
+            return await _context.Enrollments
+                .AnyAsync(e => e.UserId == userId &&
+                              e.Course != null &&
+                              e.Course.CategoryId == categoryId &&
+                              !e.Course.IsInactive);
+        }
+
+        // NEW METHOD: Get categories where user has enrollments (for learner filtering)
+        public async Task<List<string>> GetCategoryIdsWithUserEnrollmentsAsync(string userId)
+        {
+            return await _context.Enrollments
+                .Where(e => e.UserId == userId &&
+                           e.Course != null &&
+                           !e.Course.IsInactive &&
+                           e.Course.CategoryId != null) // Added null check
+                .Select(e => e.Course.CategoryId!)  // Added null-forgiving operator
+                .Distinct()
+                .ToListAsync();
+        }
     }
 }

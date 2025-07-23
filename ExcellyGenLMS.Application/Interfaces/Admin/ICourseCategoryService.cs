@@ -13,5 +13,11 @@ namespace ExcellyGenLMS.Application.Interfaces.Admin
         Task DeleteCategoryAsync(string id); // This will now perform a soft delete
         Task<CourseCategoryDto> RestoreCategoryAsync(string id); // ADDED: To restore a category
         Task<CourseCategoryDto> ToggleCategoryStatusAsync(string id);
+
+        // NEW METHOD: Get categories accessible to learners (includes inactive with enrollments)
+        Task<List<CourseCategoryDto>> GetLearnerAccessibleCategoriesAsync(string userId);
+
+        // NEW METHOD: Check if user has enrollments in a specific category
+        Task<bool> HasUserEnrollmentsInCategoryAsync(string userId, string categoryId);
     }
 }

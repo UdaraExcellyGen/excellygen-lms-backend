@@ -42,24 +42,30 @@ namespace ExcellyGenLMS.API.Controllers.Admin
 
                 _logger.LogInformation("Categories request - Active Role: {CurrentRole}, IsAdmin: {IsAdmin}", currentRole, isCurrentlyAdmin);
 
-                // Get categories from service
-                var allCategories = await _categoryService.GetAllCategoriesAsync(isCurrentlyAdmin && includeDeleted);
-
+                // For admin users, return all categories as before
                 if (isCurrentlyAdmin)
                 {
+                    var allCategories = await _categoryService.GetAllCategoriesAsync(includeDeleted);
                     _logger.LogInformation("ADMIN: Returning {Count} categories", allCategories.Count);
                     return Ok(allCategories);
                 }
 
-                // LEARNER FILTERING - Only active, non-deleted categories with published courses
-                var learnerCategories = allCategories
-                    .Where(c => !c.IsDeleted &&
-                               string.Equals(c.Status, "active", StringComparison.OrdinalIgnoreCase) &&
-                               c.TotalCourses > 0) // Only show categories that have courses
-                    .ToList();
+                // For learner users, use the new method that considers enrollments
+                var userId = User.FindFirst("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier")?.Value ??
+                           User.FindFirst("sub")?.Value ??
+                           User.FindFirst("id")?.Value ?? "";
 
-                _logger.LogInformation("LEARNER: Filtered to {FilteredCount} active categories with courses from {TotalCount}",
-                    learnerCategories.Count, allCategories.Count);
+                if (string.IsNullOrEmpty(userId))
+                {
+                    _logger.LogWarning("Could not determine user ID for learner categories request. Available claims: {Claims}",
+                        string.Join(", ", User.Claims.Select(c => $"{c.Type}={c.Value}")));
+                    return BadRequest(new { message = "User identification failed" });
+                }
+
+                var learnerCategories = await _categoryService.GetLearnerAccessibleCategoriesAsync(userId);
+
+                _logger.LogInformation("LEARNER: Returning {Count} accessible categories for user {UserId}",
+                    learnerCategories.Count, userId);
 
                 return Ok(learnerCategories);
             }
@@ -80,10 +86,33 @@ namespace ExcellyGenLMS.API.Controllers.Admin
                 var currentRole = User.FindFirst("CurrentRole")?.Value ?? "";
                 var isCurrentlyAdmin = currentRole.Equals("Admin", StringComparison.OrdinalIgnoreCase);
 
-                // TEST CASE A-03 & L-01: Non-admin users cannot access inactive/deleted categories
-                if (!isCurrentlyAdmin && (category.IsDeleted || !category.Status.Equals("active", StringComparison.OrdinalIgnoreCase)))
+                // For admin users, allow access to all categories
+                if (isCurrentlyAdmin)
                 {
-                    _logger.LogWarning("Non-admin user attempted to access inactive/deleted category: {CategoryId}", id);
+                    return Ok(category);
+                }
+
+                // For learner users, check if they can access this category
+                var userId = User.FindFirst("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier")?.Value ??
+                           User.FindFirst("sub")?.Value ??
+                           User.FindFirst("id")?.Value ?? "";
+
+                if (string.IsNullOrEmpty(userId))
+                {
+                    _logger.LogWarning("Could not determine user ID for category access check: {CategoryId}", id);
+                    return BadRequest(new { message = "User identification failed" });
+                }
+
+                // Allow access if:
+                // 1. Category is active, OR
+                // 2. Category is inactive but user has enrollments in it
+                bool canAccess = !category.IsDeleted &&
+                               (category.Status.Equals("active", StringComparison.OrdinalIgnoreCase) ||
+                                await _categoryService.HasUserEnrollmentsInCategoryAsync(userId, id));
+
+                if (!canAccess)
+                {
+                    _logger.LogWarning("Learner {UserId} attempted to access inaccessible category: {CategoryId}", userId, id);
                     return NotFound(new { message = "Course category not found or is no longer available." });
                 }
 
