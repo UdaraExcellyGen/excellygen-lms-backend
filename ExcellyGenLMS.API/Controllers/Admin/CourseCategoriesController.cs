@@ -1,10 +1,10 @@
 using Microsoft.AspNetCore.Mvc;
 using ExcellyGenLMS.Application.DTOs.Admin;
-using ExcellyGenLMS.Application.DTOs.Course;
 using ExcellyGenLMS.Application.Interfaces.Admin;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Logging;
-using ExcellyGenLMS.Core.Enums;
+using Microsoft.EntityFrameworkCore;
+using ExcellyGenLMS.Infrastructure.Data;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -17,41 +17,56 @@ namespace ExcellyGenLMS.API.Controllers.Admin
     public class CourseCategoriesController : ControllerBase
     {
         private readonly ICourseCategoryService _categoryService;
-        private readonly ICourseAdminService _courseService;
         private readonly ILogger<CourseCategoriesController> _logger;
+        private readonly ApplicationDbContext _context;
 
         public CourseCategoriesController(
             ICourseCategoryService categoryService,
-            ICourseAdminService courseService,
-            ILogger<CourseCategoriesController> logger)
+            ILogger<CourseCategoriesController> logger,
+            ApplicationDbContext context)
         {
             _categoryService = categoryService;
-            _courseService = courseService;
             _logger = logger;
+            _context = context;
         }
 
         [HttpGet]
         [Authorize(Roles = "Admin,Learner")]
-        public async Task<ActionResult<List<CourseCategoryDto>>> GetAllCategories()
+        public async Task<ActionResult<List<CourseCategoryDto>>> GetAllCategories([FromQuery] bool includeDeleted = false)
         {
             try
             {
-                var userRole = User.IsInRole("Admin") ? "Admin" : "Learner";
-                _logger.LogInformation("Getting all course categories for role: {Role}", userRole);
+                // FIXED: Check current active role, not just available roles
+                var currentRole = User.FindFirst("CurrentRole")?.Value ?? "";
+                var isCurrentlyAdmin = currentRole.Equals("Admin", StringComparison.OrdinalIgnoreCase);
 
-                var categories = await _categoryService.GetAllCategoriesAsync();
+                _logger.LogInformation("Categories request - Active Role: {CurrentRole}, IsAdmin: {IsAdmin}", currentRole, isCurrentlyAdmin);
 
-                if (User.IsInRole("Learner") && !User.IsInRole("Admin"))
+                // Get categories from service
+                var allCategories = await _categoryService.GetAllCategoriesAsync(isCurrentlyAdmin && includeDeleted);
+
+                if (isCurrentlyAdmin)
                 {
-                    categories = categories.Where(c => string.Equals(c.Status, "active", StringComparison.OrdinalIgnoreCase)).ToList();
+                    _logger.LogInformation("ADMIN: Returning {Count} categories", allCategories.Count);
+                    return Ok(allCategories);
                 }
 
-                return Ok(categories);
+                // LEARNER FILTERING - Only active, non-deleted categories with published courses
+                var learnerCategories = allCategories
+                    .Where(c => !c.IsDeleted &&
+                               string.Equals(c.Status, "active", StringComparison.OrdinalIgnoreCase) &&
+                               c.TotalCourses > 0) // Only show categories that have courses
+                    .ToList();
+
+                _logger.LogInformation("LEARNER: Filtered to {FilteredCount} active categories with courses from {TotalCount}",
+                    learnerCategories.Count, allCategories.Count);
+
+                return Ok(learnerCategories);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error getting all categories");
-                return StatusCode(500, new { message = "An error occurred while retrieving categories." });
+                _logger.LogError(ex, "Error retrieving categories");
+                return StatusCode(500, new { message = "Failed to retrieve categories. Please try again." });
             }
         }
 
@@ -61,139 +76,99 @@ namespace ExcellyGenLMS.API.Controllers.Admin
         {
             try
             {
-                var userRole = User.IsInRole("Admin") ? "Admin" : "Learner";
-                _logger.LogInformation("Getting course category with ID: {CategoryId} for role: {Role}", id, userRole);
-
                 var category = await _categoryService.GetCategoryByIdAsync(id);
+                var currentRole = User.FindFirst("CurrentRole")?.Value ?? "";
+                var isCurrentlyAdmin = currentRole.Equals("Admin", StringComparison.OrdinalIgnoreCase);
 
-                if (User.IsInRole("Learner") && !User.IsInRole("Admin"))
+                // TEST CASE A-03 & L-01: Non-admin users cannot access inactive/deleted categories
+                if (!isCurrentlyAdmin && (category.IsDeleted || !category.Status.Equals("active", StringComparison.OrdinalIgnoreCase)))
                 {
-                    if (!string.Equals(category.Status, "active", StringComparison.OrdinalIgnoreCase))
-                    {
-                        return NotFound(new { message = "Course category not found." });
-                    }
+                    _logger.LogWarning("Non-admin user attempted to access inactive/deleted category: {CategoryId}", id);
+                    return NotFound(new { message = "Course category not found or is no longer available." });
                 }
 
                 return Ok(category);
             }
-            catch (KeyNotFoundException ex)
+            catch (KeyNotFoundException)
             {
-                _logger.LogWarning(ex, "Category not found: {CategoryId}", id);
-                return NotFound(new { message = ex.Message });
+                return NotFound(new { message = $"Category with ID {id} not found." });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error getting category: {CategoryId}", id);
-                return StatusCode(500, new { message = "An error occurred while retrieving the category." });
+                return StatusCode(500, new { message = "An error occurred." });
             }
         }
 
-        [HttpGet("{categoryId}/courses-with-stats")]
-        [Authorize(Roles = "Admin,Learner")]
-        public async Task<ActionResult<object>> GetCoursesWithStatsByCategory(string categoryId)
+        [HttpGet("{id}/courses")]
+        [Authorize(Roles = "Admin,CourseCoordinator")]
+        public async Task<ActionResult> GetCoursesByCategory(string id)
         {
             try
             {
-                var userRole = User.IsInRole("Admin") ? "Admin" : "Learner";
-                _logger.LogInformation("Getting courses and stats for category with ID: {CategoryId}, role: {Role}", categoryId, userRole);
+                var currentRole = User.FindFirst("CurrentRole")?.Value ?? "";
+                _logger.LogInformation($"Getting courses for category: {id} by role: {currentRole}");
 
-                var category = await _categoryService.GetCategoryByIdAsync(categoryId);
+                // First verify the category exists
+                var category = await _categoryService.GetCategoryByIdAsync(id);
 
-                if (User.IsInRole("Learner") && !User.IsInRole("Admin"))
-                {
-                    if (!string.Equals(category.Status, "active", StringComparison.OrdinalIgnoreCase))
+                // Get courses directly from database using Entity Framework
+                var courses = await _context.Courses
+                    .Include(c => c.Creator)
+                    .Include(c => c.Lessons)
+                    .Where(c => c.CategoryId == id && !c.IsInactive)
+                    .OrderByDescending(c => c.CreatedAt)
+                    .Select(c => new
                     {
-                        return NotFound(new { message = "Course category not found." });
-                    }
-                }
+                        id = c.Id,
+                        title = c.Title,
+                        description = c.Description,
+                        status = c.Status.ToString(),
+                        createdAt = c.CreatedAt,
+                        createdAtFormatted = c.CreatedAt.ToString("yyyy-MM-dd"),
+                        creatorId = c.CreatorId,
+                        categoryId = c.CategoryId,
+                        estimatedTime = c.EstimatedTime,
+                        coursePoints = c.CoursePoints,
+                        thumbnailImagePath = c.ThumbnailImagePath,
+                        creator = c.Creator != null ? new
+                        {
+                            id = c.Creator.Id,
+                            name = c.Creator.Name,
+                            email = c.Creator.Email
+                        } : null,
+                        lessons = c.Lessons.Select(l => new
+                        {
+                            id = l.Id,
+                            lessonName = l.LessonName
+                        }).ToList()
+                    })
+                    .ToListAsync();
 
-                var coursesTask = _courseService.GetCoursesByCategoryIdAsync(categoryId);
-
-                // FIX: Declare a nullable variable to hold the stats result, which resolves the warning.
-                ExcellyGenLMS.Application.Services.Admin.AdminCategoryStatsDto? statsResult = null;
-                if (User.IsInRole("Admin"))
-                {
-                    statsResult = await _courseService.GetCategoryStatsAsync(categoryId);
-                }
-
-                var courses = await coursesTask;
-
-                if (User.IsInRole("Learner") && !User.IsInRole("Admin"))
-                {
-                    courses = courses.Where(c => c.Status.ToString().Equals("Published", StringComparison.OrdinalIgnoreCase)).ToList();
-                }
-
-                var result = new
-                {
-                    Category = category,
-                    Courses = courses,
-                    Stats = statsResult,
-                    TotalCourses = courses.Count
-                };
-
-                return Ok(result);
-            }
-            catch (KeyNotFoundException ex)
-            {
-                _logger.LogWarning(ex, "Category not found: {CategoryId}", categoryId);
-                return NotFound(new { message = ex.Message });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error getting courses and stats for category: {CategoryId}", categoryId);
-                return StatusCode(500, new { message = "An error occurred while retrieving courses and stats." });
-            }
-        }
-
-        [HttpGet("{categoryId}/courses")]
-        [Authorize(Roles = "Admin,Learner")]
-        public async Task<ActionResult<List<CourseDto>>> GetCoursesByCategory(string categoryId)
-        {
-            try
-            {
-                var userRole = User.IsInRole("Admin") ? "Admin" : "Learner";
-                _logger.LogInformation("Getting courses for category with ID: {CategoryId}, role: {Role}", categoryId, userRole);
-
-                var category = await _categoryService.GetCategoryByIdAsync(categoryId);
-
-                if (User.IsInRole("Learner") && !User.IsInRole("Admin"))
-                {
-                    if (!string.Equals(category.Status, "active", StringComparison.OrdinalIgnoreCase))
-                    {
-                        return NotFound(new { message = "Course category not found." });
-                    }
-                }
-
-                var courses = await _courseService.GetCoursesByCategoryIdAsync(categoryId);
-
-                if (User.IsInRole("Learner") && !User.IsInRole("Admin"))
-                {
-                    courses = courses.Where(c => c.Status.ToString().Equals("Published", StringComparison.OrdinalIgnoreCase)).ToList();
-                }
+                _logger.LogInformation($"Retrieved {courses.Count} courses for category: {id}");
 
                 return Ok(courses);
             }
-            catch (KeyNotFoundException ex)
+            catch (KeyNotFoundException)
             {
-                _logger.LogWarning(ex, "Category not found: {CategoryId}", categoryId);
-                return NotFound(new { message = ex.Message });
+                _logger.LogWarning($"Category not found: {id}");
+                return NotFound(new { message = $"Category with ID {id} not found." });
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error getting courses for category: {CategoryId}", categoryId);
+                _logger.LogError(ex, $"Error getting courses for category: {id}");
                 return StatusCode(500, new { message = "An error occurred while retrieving courses." });
             }
         }
 
         [HttpPost]
         [Authorize(Roles = "Admin")]
-        public async Task<ActionResult<CourseCategoryDto>> CreateCategory([FromBody] CreateCourseCategoryDto createCategoryDto)
+        public async Task<ActionResult<CourseCategoryDto>> CreateCategory([FromBody] CreateCourseCategoryDto dto)
         {
             try
             {
-                _logger.LogInformation("Creating new course category");
-                var category = await _categoryService.CreateCategoryAsync(createCategoryDto);
-
+                var category = await _categoryService.CreateCategoryAsync(dto);
+                _logger.LogInformation("Created new category: {CategoryId} - {Title}", category.Id, category.Title);
                 return CreatedAtAction(nameof(GetCategoryById), new { id = category.Id }, category);
             }
             catch (Exception ex)
@@ -205,19 +180,17 @@ namespace ExcellyGenLMS.API.Controllers.Admin
 
         [HttpPut("{id}")]
         [Authorize(Roles = "Admin")]
-        public async Task<ActionResult<CourseCategoryDto>> UpdateCategory(string id, [FromBody] UpdateCourseCategoryDto updateCategoryDto)
+        public async Task<ActionResult<CourseCategoryDto>> UpdateCategory(string id, [FromBody] UpdateCourseCategoryDto dto)
         {
             try
             {
-                _logger.LogInformation("Updating course category with ID: {CategoryId}", id);
-                var category = await _categoryService.UpdateCategoryAsync(id, updateCategoryDto);
-
-                return Ok(category);
+                var updatedCategory = await _categoryService.UpdateCategoryAsync(id, dto);
+                _logger.LogInformation("Updated category: {CategoryId} - Status: {Status}", id, dto.Status);
+                return Ok(updatedCategory);
             }
-            catch (KeyNotFoundException ex)
+            catch (KeyNotFoundException)
             {
-                _logger.LogWarning(ex, "Category not found: {CategoryId}", id);
-                return NotFound(new { message = ex.Message });
+                return NotFound(new { message = $"Category with ID {id} not found." });
             }
             catch (Exception ex)
             {
@@ -232,20 +205,45 @@ namespace ExcellyGenLMS.API.Controllers.Admin
         {
             try
             {
-                _logger.LogInformation("Deleting course category with ID: {CategoryId}", id);
                 await _categoryService.DeleteCategoryAsync(id);
-
+                _logger.LogInformation("Successfully soft-deleted category: {CategoryId}", id);
                 return NoContent();
             }
-            catch (KeyNotFoundException ex)
+            catch (KeyNotFoundException)
             {
-                _logger.LogWarning(ex, "Category not found: {CategoryId}", id);
-                return NotFound(new { message = ex.Message });
+                return NotFound(new { message = $"Category with ID {id} not found." });
+            }
+            catch (InvalidOperationException ex)
+            {
+                // TEST CASE A-05: Proper error message for categories with active courses
+                _logger.LogWarning("Cannot delete category {CategoryId}: {Reason}", id, ex.Message);
+                return BadRequest(new { message = $"Cannot delete category. {ex.Message}" });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error deleting category: {CategoryId}", id);
                 return StatusCode(500, new { message = "An error occurred while deleting the category." });
+            }
+        }
+
+        [HttpPost("{id}/restore")]
+        [Authorize(Roles = "Admin")]
+        public async Task<ActionResult<CourseCategoryDto>> RestoreCategory(string id)
+        {
+            try
+            {
+                var restoredCategory = await _categoryService.RestoreCategoryAsync(id);
+                _logger.LogInformation("Successfully restored category: {CategoryId} - {Title}", id, restoredCategory.Title);
+                return Ok(restoredCategory);
+            }
+            catch (KeyNotFoundException)
+            {
+                return NotFound(new { message = $"Category with ID {id} not found in trash." });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error restoring category: {CategoryId}", id);
+                return StatusCode(500, new { message = "An error occurred while restoring the category." });
             }
         }
 
@@ -255,20 +253,19 @@ namespace ExcellyGenLMS.API.Controllers.Admin
         {
             try
             {
-                _logger.LogInformation("Toggling status for course category with ID: {CategoryId}", id);
-                var category = await _categoryService.ToggleCategoryStatusAsync(id);
-
-                return Ok(category);
+                var updatedCategory = await _categoryService.ToggleCategoryStatusAsync(id);
+                var action = updatedCategory.Status == "active" ? "activated" : "deactivated";
+                _logger.LogInformation("Successfully {Action} category: {CategoryId} - {Title}", action, id, updatedCategory.Title);
+                return Ok(updatedCategory);
             }
-            catch (KeyNotFoundException ex)
+            catch (KeyNotFoundException)
             {
-                _logger.LogWarning(ex, "Category not found: {CategoryId}", id);
-                return NotFound(new { message = ex.Message });
+                return NotFound(new { message = $"Category with ID {id} not found." });
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error toggling category status: {CategoryId}", id);
-                return StatusCode(500, new { message = "An error occurred while toggling the category status." });
+                _logger.LogError(ex, "Error toggling status for category: {CategoryId}", id);
+                return StatusCode(500, new { message = "An error occurred while updating the category status." });
             }
         }
     }

@@ -1,5 +1,6 @@
 // ExcellyGenLMS.Application/DTOs/Admin/CourseCategoryDtos.cs
-using System.ComponentModel.DataAnnotations; // Needed for [Required], [StringLength] attributes
+using System;
+using System.ComponentModel.DataAnnotations;
 
 namespace ExcellyGenLMS.Application.DTOs.Admin
 {
@@ -13,7 +14,10 @@ namespace ExcellyGenLMS.Application.DTOs.Admin
         public string Status { get; set; } = string.Empty; // e.g., "active", "inactive"
         public int TotalCourses { get; set; } // Count of courses within this category
         public int ActiveLearnersCount { get; set; } // Count of unique active learners enrolled in courses of this category
-        public string AvgDuration { get; set; } = "N/A"; // Average estimated duration of courses in this category (e.g., "6 months", "20 hours")
+        public string AvgDuration { get; set; } = "N/A"; // Average estimated duration of courses in this category
+        public bool IsDeleted { get; set; } // ADDED: To reflect soft-delete status
+        public DateTime? DeletedAt { get; set; } // ADDED: To know when it was deleted
+        public DateTime? RestoreAt { get; set; } // ADDED: To inform frontend of the 30-day recovery window
     }
 
     // DTO for creating a new Course Category
