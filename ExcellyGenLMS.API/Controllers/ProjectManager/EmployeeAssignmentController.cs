@@ -28,6 +28,30 @@ namespace ExcellyGenLMS.API.Controllers.ProjectManager
             _logger = logger;
         }
 
+        // ----- Dashboard Endpoint -----
+
+        [HttpGet("dashboard/stats")]
+        public async Task<ActionResult<ProjectManagerDashboardStatsDto>> GetDashboardStats()
+        {
+            try
+            {
+                _logger.LogInformation("Getting Project Manager dashboard statistics");
+                
+                var stats = await _employeeAssignmentService.GetDashboardStatsAsync();
+                
+                _logger.LogInformation($"Dashboard stats retrieved successfully - " +
+                                     $"Projects: {stats.Projects.Total}/{stats.Projects.Active}, " +
+                                     $"Employees: {stats.Employees.Total} (On Projects: {stats.Employees.OnProjects})");
+                
+                return Ok(stats);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error fetching dashboard statistics");
+                return StatusCode(500, new { message = "An error occurred while fetching dashboard statistics", error = ex.Message });
+            }
+        }
+
         // ----- Employee Endpoints -----
 
         [HttpGet("employees")]
