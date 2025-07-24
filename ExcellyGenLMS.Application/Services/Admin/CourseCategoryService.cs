@@ -40,7 +40,7 @@ namespace ExcellyGenLMS.Application.Services.Admin
                 AccessReason = accessReason,
                 CreatedAt = category.CreatedAt,
                 UpdatedAt = category.UpdatedAt,
-                CreatedBy = "Admin" // Could be enhanced to show actual creator if you track this
+                CreatedBy = category.Creator?.Name ?? "System"
             };
         }
 
@@ -51,25 +51,30 @@ namespace ExcellyGenLMS.Application.Services.Admin
 
             foreach (var category in categories)
             {
-                var coursesCount = await _categoryRepository.GetCoursesCountByCategoryIdAsync(category.Id);
-                var activeLearnersCount = await _categoryRepository.GetActiveLearnersCountByCategoryIdAsync(category.Id);
-                var avgTimeSpan = await _categoryRepository.GetAverageCourseDurationByCategoryIdAsync(category.Id);
-                var avgDuration = avgTimeSpan.HasValue ? $"{Math.Round(avgTimeSpan.Value.TotalHours)} hours" : "N/A";
+                var activeCourses = category.Courses.Where(c => !c.IsInactive).ToList();
+                var coursesCount = activeCourses.Count;
+                var activeLearnersCount = activeCourses
+                                          .SelectMany(c => c.Enrollments)
+                                          .Select(e => e.UserId)
+                                          .Distinct()
+                                          .Count();
+
+                var avgDuration = "N/A";
+                if (activeCourses.Any(c => c.EstimatedTime > 0))
+                {
+                    var avgHours = activeCourses.Average(c => c.EstimatedTime);
+                    avgDuration = $"{Math.Round(avgHours)} hours";
+                }
 
                 categoryDtos.Add(MapToDto(category, coursesCount, activeLearnersCount, avgDuration));
             }
             return categoryDtos;
         }
 
-        // NEW METHOD: Get categories accessible to learners (includes inactive categories with enrollments)
         public async Task<List<CourseCategoryDto>> GetLearnerAccessibleCategoriesAsync(string userId)
         {
-            // Get all non-deleted categories
             var allCategories = await _categoryRepository.GetAllCategoriesAsync(includeDeleted: false);
-
-            // Get category IDs where the user has enrollments
             var userEnrolledCategoryIds = await _categoryRepository.GetCategoryIdsWithUserEnrollmentsAsync(userId);
-
             var accessibleCategories = new List<CourseCategoryDto>();
 
             foreach (var category in allCategories)
@@ -78,13 +83,9 @@ namespace ExcellyGenLMS.Application.Services.Admin
                 var activeLearnersCount = await _categoryRepository.GetActiveLearnersCountByCategoryIdAsync(category.Id);
                 var avgTimeSpan = await _categoryRepository.GetAverageCourseDurationByCategoryIdAsync(category.Id);
                 var avgDuration = avgTimeSpan.HasValue ? $"{Math.Round(avgTimeSpan.Value.TotalHours)} hours" : "N/A";
-
                 var hasUserEnrollments = userEnrolledCategoryIds.Contains(category.Id);
                 var isActive = category.Status.Equals("active", StringComparison.OrdinalIgnoreCase);
 
-                // Include category if:
-                // 1. It's active and has courses, OR
-                // 2. User has enrollments in this category (even if inactive)
                 bool shouldInclude = (isActive && coursesCount > 0) || hasUserEnrollments;
 
                 if (shouldInclude)
@@ -94,7 +95,7 @@ namespace ExcellyGenLMS.Application.Services.Admin
                 }
             }
 
-            return accessibleCategories.OrderByDescending(c => c.Status == "active" ? 1 : 0) // Active categories first
+            return accessibleCategories.OrderByDescending(c => c.Status == "active" ? 1 : 0)
                                       .ThenByDescending(c => c.TotalCourses)
                                       .ToList();
         }
@@ -109,12 +110,26 @@ namespace ExcellyGenLMS.Application.Services.Admin
             return MapToDto(category, coursesCount, activeLearnersCount, avgDuration);
         }
 
-        public async Task<CourseCategoryDto> CreateCategoryAsync(CreateCourseCategoryDto dto)
+        // --- Start of changes ---
+        // This method is now cleaner, more efficient, and removes the compiler warning.
+        public async Task<CourseCategoryDto> CreateCategoryAsync(CreateCourseCategoryDto dto, string creatorId)
         {
-            var cat = new CourseCategory { Title = dto.Title, Description = dto.Description, Icon = dto.Icon };
+            var cat = new CourseCategory
+            {
+                Title = dto.Title,
+                Description = dto.Description,
+                Icon = dto.Icon,
+                CreatedById = creatorId
+            };
+
+            // The repository will create the category and EF will populate the 'cat.Id' property.
             await _categoryRepository.CreateCategoryAsync(cat);
-            return MapToDto(cat, 0, 0, "N/A");
+
+            // We then call the existing GetCategoryByIdAsync with the new ID to get the full DTO.
+            // This avoids the null reference warning by removing the redundant fetch.
+            return await GetCategoryByIdAsync(cat.Id);
         }
+        // --- End of changes ---
 
         public async Task<CourseCategoryDto> UpdateCategoryAsync(string id, UpdateCourseCategoryDto dto)
         {
@@ -129,7 +144,6 @@ namespace ExcellyGenLMS.Application.Services.Admin
 
         public async Task DeleteCategoryAsync(string id)
         {
-            // TEST CASE A-05: Check for active courses/enrollments before deletion
             if (await _categoryRepository.HasActiveCoursesAsync(id))
             {
                 throw new InvalidOperationException("This category still contains active courses or learner enrollments. Please move or complete all courses before deletion.");
@@ -149,7 +163,6 @@ namespace ExcellyGenLMS.Application.Services.Admin
             return await GetCategoryByIdAsync(id);
         }
 
-        // NEW METHOD: Check if user has enrollments in a specific category
         public async Task<bool> HasUserEnrollmentsInCategoryAsync(string userId, string categoryId)
         {
             return await _categoryRepository.HasActiveEnrollmentsAsync(categoryId, userId);

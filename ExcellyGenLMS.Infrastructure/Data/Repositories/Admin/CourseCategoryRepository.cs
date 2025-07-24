@@ -25,7 +25,14 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Admin
             {
                 query = query.Where(c => !c.IsDeleted);
             }
-            return await query.OrderByDescending(c => c.CreatedAt).ToListAsync();
+
+            return await query
+                .Include(c => c.Creator)
+                .Include(c => c.Courses)
+                    .ThenInclude(course => course.Enrollments)
+                .OrderByDescending(c => c.CreatedAt)
+                .AsSplitQuery()
+                .ToListAsync();
         }
 
         public async Task<CourseCategory?> GetCategoryByIdAsync(string id) => await _context.CourseCategories.FindAsync(id);
@@ -68,10 +75,8 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Admin
             return category;
         }
 
-        // FIXED: Simplified and optimized - only check for any enrollments, not complex queries
         public async Task<bool> HasActiveCoursesAsync(string categoryId)
         {
-            // Simple check: if there are ANY enrollments in courses within this category
             return await _context.Enrollments
                 .AnyAsync(e => e.Course != null && e.Course.CategoryId == categoryId);
         }
@@ -106,7 +111,6 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Admin
             return averageHours.HasValue ? TimeSpan.FromHours(averageHours.Value) : null;
         }
 
-        // NEW METHOD: Check if user has active enrollments in this category
         public async Task<bool> HasActiveEnrollmentsAsync(string categoryId, string userId)
         {
             return await _context.Enrollments
@@ -116,17 +120,15 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Admin
                               !e.Course.IsInactive);
         }
 
-        // NEW METHOD: Get categories where user has enrollments (for learner filtering)
+        
         public async Task<List<string>> GetCategoryIdsWithUserEnrollmentsAsync(string userId)
         {
-            return await _context.Enrollments
-                .Where(e => e.UserId == userId &&
-                           e.Course != null &&
-                           !e.Course.IsInactive &&
-                           e.Course.CategoryId != null) // Added null check
-                .Select(e => e.Course.CategoryId!)  // Added null-forgiving operator
+            return await _context.Courses
+                .Where(c => !c.IsInactive && c.CategoryId != null && c.Enrollments.Any(e => e.UserId == userId))
+                .Select(c => c.CategoryId!)
                 .Distinct()
                 .ToListAsync();
         }
+        
     }
 }

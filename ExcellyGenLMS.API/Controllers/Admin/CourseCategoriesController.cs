@@ -8,6 +8,7 @@ using ExcellyGenLMS.Infrastructure.Data;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Claims;
 using System.Threading.Tasks;
 
 namespace ExcellyGenLMS.API.Controllers.Admin
@@ -36,13 +37,11 @@ namespace ExcellyGenLMS.API.Controllers.Admin
         {
             try
             {
-                // FIXED: Check current active role, not just available roles
                 var currentRole = User.FindFirst("CurrentRole")?.Value ?? "";
                 var isCurrentlyAdmin = currentRole.Equals("Admin", StringComparison.OrdinalIgnoreCase);
 
                 _logger.LogInformation("Categories request - Active Role: {CurrentRole}, IsAdmin: {IsAdmin}", currentRole, isCurrentlyAdmin);
 
-                // For admin users, return all categories as before
                 if (isCurrentlyAdmin)
                 {
                     var allCategories = await _categoryService.GetAllCategoriesAsync(includeDeleted);
@@ -50,10 +49,7 @@ namespace ExcellyGenLMS.API.Controllers.Admin
                     return Ok(allCategories);
                 }
 
-                // For learner users, use the new method that considers enrollments
-                var userId = User.FindFirst("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier")?.Value ??
-                           User.FindFirst("sub")?.Value ??
-                           User.FindFirst("id")?.Value ?? "";
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
                 if (string.IsNullOrEmpty(userId))
                 {
@@ -86,16 +82,12 @@ namespace ExcellyGenLMS.API.Controllers.Admin
                 var currentRole = User.FindFirst("CurrentRole")?.Value ?? "";
                 var isCurrentlyAdmin = currentRole.Equals("Admin", StringComparison.OrdinalIgnoreCase);
 
-                // For admin users, allow access to all categories
                 if (isCurrentlyAdmin)
                 {
                     return Ok(category);
                 }
 
-                // For learner users, check if they can access this category
-                var userId = User.FindFirst("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier")?.Value ??
-                           User.FindFirst("sub")?.Value ??
-                           User.FindFirst("id")?.Value ?? "";
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
                 if (string.IsNullOrEmpty(userId))
                 {
@@ -103,9 +95,6 @@ namespace ExcellyGenLMS.API.Controllers.Admin
                     return BadRequest(new { message = "User identification failed" });
                 }
 
-                // Allow access if:
-                // 1. Category is active, OR
-                // 2. Category is inactive but user has enrollments in it
                 bool canAccess = !category.IsDeleted &&
                                (category.Status.Equals("active", StringComparison.OrdinalIgnoreCase) ||
                                 await _categoryService.HasUserEnrollmentsInCategoryAsync(userId, id));
@@ -138,10 +127,8 @@ namespace ExcellyGenLMS.API.Controllers.Admin
                 var currentRole = User.FindFirst("CurrentRole")?.Value ?? "";
                 _logger.LogInformation($"Getting courses for category: {id} by role: {currentRole}");
 
-                // First verify the category exists
                 var category = await _categoryService.GetCategoryByIdAsync(id);
 
-                // Get courses directly from database using Entity Framework
                 var courses = await _context.Courses
                     .Include(c => c.Creator)
                     .Include(c => c.Lessons)
@@ -196,8 +183,16 @@ namespace ExcellyGenLMS.API.Controllers.Admin
         {
             try
             {
-                var category = await _categoryService.CreateCategoryAsync(dto);
-                _logger.LogInformation("Created new category: {CategoryId} - {Title}", category.Id, category.Title);
+                // This dynamically gets the ID of the user who is currently logged in.
+                var creatorId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                if (string.IsNullOrEmpty(creatorId))
+                {
+                    return Unauthorized(new { message = "User is not authenticated." });
+                }
+
+                // It passes the correct user's ID to the service.
+                var category = await _categoryService.CreateCategoryAsync(dto, creatorId);
+                _logger.LogInformation("Created new category: {CategoryId} - {Title} by User: {UserId}", category.Id, category.Title, creatorId);
                 return CreatedAtAction(nameof(GetCategoryById), new { id = category.Id }, category);
             }
             catch (Exception ex)
@@ -244,7 +239,6 @@ namespace ExcellyGenLMS.API.Controllers.Admin
             }
             catch (InvalidOperationException ex)
             {
-                // TEST CASE A-05: Proper error message for categories with active courses
                 _logger.LogWarning("Cannot delete category {CategoryId}: {Reason}", id, ex.Message);
                 return BadRequest(new { message = $"Cannot delete category. {ex.Message}" });
             }
