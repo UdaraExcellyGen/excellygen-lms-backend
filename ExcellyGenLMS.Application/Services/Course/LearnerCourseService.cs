@@ -126,6 +126,7 @@ namespace ExcellyGenLMS.Application.Services.Course
                         EstimatedTime = course.EstimatedTime,
                         IsInactive = course.IsInactive,
                         ThumbnailUrl = course.ThumbnailImagePath != null ? _fileStorageService.GetFileUrl(course.ThumbnailImagePath) : string.Empty,
+                        Creator = new UserBasicDto { Id = course.Creator.Id, Name = course.Creator.Name },
                         Category = course.Category != null
                             ? new CategoryDto { Id = course.Category.Id, Title = course.Category.Title }
                             : new CategoryDto { Id = "uncategorized", Title = "Uncategorized" },
