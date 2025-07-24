@@ -24,5 +24,11 @@ namespace ExcellyGenLMS.Application.Interfaces.ProjectManager
         
         Task<bool> ValidateAssignmentAsync(string employeeId, int workloadPercentage);
         Task<IEnumerable<string>> GetEmployeeSkillsAsync(string employeeId);
+        
+        /// <summary>
+        /// Gets dashboard statistics for Project Manager
+        /// </summary>
+        /// <returns>Dashboard statistics including project, employee, and technology metrics</returns>
+        Task<ProjectManagerDashboardStatsDto> GetDashboardStatsAsync();
     }
 }
