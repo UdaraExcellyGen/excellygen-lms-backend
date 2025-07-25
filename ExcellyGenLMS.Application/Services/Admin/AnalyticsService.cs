@@ -1,4 +1,3 @@
-// ExcellyGenLMS.Application/Services/Admin/AnalyticsService.cs
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -16,85 +15,151 @@ namespace ExcellyGenLMS.Application.Services.Admin
         private readonly IDbConnection _dbConnection;
         private readonly ILogger<AnalyticsService> _logger;
 
+        
+        private class KpiQueryResult
+        {
+            public string Name { get; set; }
+            public int Count { get; set; }
+        }
+
         public AnalyticsService(IDbConnection dbConnection, ILogger<AnalyticsService> logger)
         {
             _dbConnection = dbConnection;
             _logger = logger;
         }
 
-        public async Task<DashboardAnalyticsDto> GetDashboardAnalyticsAsync(string? categoryId = null)
+        public async Task<KpiSummaryDto> GetKpiSummaryAsync()
         {
-            var enrollmentAnalytics = await GetEnrollmentAnalyticsAsync(categoryId);
-            var courseAvailability = await GetCourseAvailabilityAnalyticsAsync();
-            var userDistribution = await GetUserDistributionAnalyticsAsync();
-
-            return new DashboardAnalyticsDto
+            try
             {
-                EnrollmentAnalytics = enrollmentAnalytics,
-                CourseAvailability = courseAvailability,
-                UserDistribution = userDistribution
-            };
+                _logger.LogInformation("Getting KPI summary data.");
+                
+                string usersSql = "SELECT COUNT(*) FROM Users; SELECT COUNT(*) FROM Users WHERE Status = 'active';";
+                string coursesSql = "SELECT COUNT(*) FROM Courses;";
+                string enrollmentsSql = "SELECT COUNT(*) FROM Enrollments; SELECT COUNT(*) FROM Enrollments WHERE completion_date IS NOT NULL;";
+
+                using var usersMulti = await _dbConnection.QueryMultipleAsync(usersSql);
+                var totalUsers = await usersMulti.ReadFirstAsync<int>();
+                var activeUsers = await usersMulti.ReadFirstAsync<int>();
+
+                var totalCourses = await _dbConnection.QuerySingleAsync<int>(coursesSql);
+
+                using var enrollmentsMulti = await _dbConnection.QueryMultipleAsync(enrollmentsSql);
+                var totalEnrollments = await enrollmentsMulti.ReadFirstAsync<int>();
+                var completedEnrollments = await enrollmentsMulti.ReadFirstAsync<int>();
+
+                return new KpiSummaryDto
+                {
+                    TotalUsers = totalUsers,
+                    ActiveUsers = activeUsers,
+                    TotalCourses = totalCourses,
+                    TotalEnrollments = totalEnrollments,
+                    CompletedEnrollments = completedEnrollments
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting KPI summary data.");
+                throw;
+            }
+        }
+
+        public async Task<EnrollmentKpiDto> GetEnrollmentKpiAsync()
+        {
+            try
+            {
+                _logger.LogInformation("Getting enrollment KPI data using robust, isolated queries.");
+
+                // ---  Most Enrolled Category ---
+                string mostEnrolledCategorySql = @"
+                    SELECT TOP 1 cc.Title as Name, COUNT(1) as Count
+                    FROM Enrollments e
+                    INNER JOIN Courses c ON e.course_id = c.Id
+                    INNER JOIN CourseCategories cc ON c.CategoryId = cc.Id
+                    GROUP BY cc.Title
+                    ORDER BY Count DESC;";
+
+                // ---  Most Enrolled Course ---
+                string mostEnrolledCourseSql = @"
+                    SELECT TOP 1 c.Title as Name, COUNT(1) as Count
+                    FROM Enrollments e
+                    INNER JOIN Courses c ON e.course_id = c.Id
+                    GROUP BY c.Title
+                    ORDER BY Count DESC;";
+
+                // ---  Most Completed Course ---
+                string mostCompletedCourseSql = @"
+                    SELECT TOP 1 c.Title as Name, COUNT(1) as Count
+                    FROM Enrollments e
+                    INNER JOIN Courses c ON e.course_id = c.Id
+                    WHERE e.completion_date IS NOT NULL
+                    GROUP BY c.Title
+                    ORDER BY Count DESC;";
+
+                // Execute each query independently. If any fails to find data, it will return null.
+                var popularCategory = await _dbConnection.QueryFirstOrDefaultAsync<KpiQueryResult>(mostEnrolledCategorySql);
+                var popularCourse = await _dbConnection.QueryFirstOrDefaultAsync<KpiQueryResult>(mostEnrolledCourseSql);
+                var completedCourse = await _dbConnection.QueryFirstOrDefaultAsync<KpiQueryResult>(mostCompletedCourseSql);
+
+                
+                return new EnrollmentKpiDto
+                {
+                    MostPopularCategoryName = popularCategory?.Name,
+                    MostPopularCategoryEnrollments = popularCategory?.Count ?? 0,
+                    MostPopularCourseName = popularCourse?.Name,
+                    MostPopularCourseEnrollments = popularCourse?.Count ?? 0,
+                    MostCompletedCourseName = completedCourse?.Name,
+                    MostCompletedCourseCount = completedCourse?.Count ?? 0
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "A critical error occurred while getting enrollment KPI data.");
+                throw;
+            }
         }
 
         public async Task<EnrollmentAnalyticsDto> GetEnrollmentAnalyticsAsync(string? categoryId = null)
         {
             try
             {
-                _logger.LogInformation("Getting enrollment analytics data for category: {CategoryId}", categoryId ?? "all");
-
-                // Get all categories for dropdown with course counts
                 string categoriesSql = @"
                     SELECT 
-                        c.Id, 
-                        c.Title, 
-                        c.Description, 
-                        c.Icon, 
-                        c.Status,
-                        COUNT(co.Id) AS TotalCourses
-                    FROM 
-                        CourseCategories c
-                    LEFT JOIN 
-                        Courses co ON c.Id = co.CategoryId
-                    WHERE 
-                        c.Status = 'active'
-                    GROUP BY 
-                        c.Id, c.Title, c.Description, c.Icon, c.Status";
-
+                        c.Id, c.Title, c.Description, c.Icon, c.Status, COUNT(co.Id) AS TotalCourses
+                    FROM CourseCategories c
+                    LEFT JOIN Courses co ON c.Id = co.CategoryId
+                    WHERE c.Status = 'active'
+                    GROUP BY c.Id, c.Title, c.Description, c.Icon, c.Status
+                    ORDER BY c.Title";
                 var categories = await _dbConnection.QueryAsync<CourseCategoryDto>(categoriesSql);
 
-                // If no category provided, return empty enrollment data but with categories
+                List<EnrollmentChartItemDto> enrollmentData;
+
                 if (string.IsNullOrEmpty(categoryId))
                 {
-                    return new EnrollmentAnalyticsDto
-                    {
-                        EnrollmentData = new List<ChartDataDto>(),
-                        Categories = categories.ToList()
-                    };
+                    enrollmentData = new List<EnrollmentChartItemDto>();
                 }
-
-                // Get enrollment data for the selected category
-                // Using courseName and enrollmentCount properties to match frontend expectations
-                string enrollmentSql = @"
-                    SELECT c.Title AS CourseName, COUNT(e.enrollment_id) AS EnrollmentCount 
-                    FROM Enrollments e
-                    JOIN Courses c ON e.course_id = c.Id
-                    WHERE c.CategoryId = @CategoryId
-                    GROUP BY c.Title
-                    ORDER BY EnrollmentCount DESC";
-
-                // This query will return records with CourseName and EnrollmentCount properties
-                var enrollmentData = await _dbConnection.QueryAsync(enrollmentSql, new { CategoryId = categoryId });
-
-                // Convert to ChartDataDto which uses Name and Value properties
-                var chartData = enrollmentData.Select(item => new ChartDataDto
+                else
                 {
-                    Name = item.CourseName,
-                    Value = item.EnrollmentCount
-                }).ToList();
+                    string enrollmentSql = @"
+                        SELECT 
+                            c.Id,
+                            c.Title AS Name, 
+                            SUM(CASE WHEN e.completion_date IS NULL THEN 1 ELSE 0 END) AS InProgress,
+                            SUM(CASE WHEN e.completion_date IS NOT NULL THEN 1 ELSE 0 END) AS Completed
+                        FROM Enrollments e
+                        JOIN Courses c ON e.course_id = c.Id
+                        WHERE c.CategoryId = @CategoryId
+                        GROUP BY c.Id, c.Title
+                        ORDER BY (SUM(CASE WHEN e.completion_date IS NULL THEN 1 ELSE 0 END) + SUM(CASE WHEN e.completion_date IS NOT NULL THEN 1 ELSE 0 END)) DESC";
+                    
+                    var results = await _dbConnection.QueryAsync<EnrollmentChartItemDto>(enrollmentSql, new { CategoryId = categoryId });
+                    enrollmentData = results.ToList();
+                }
 
                 return new EnrollmentAnalyticsDto
                 {
-                    EnrollmentData = chartData,
+                    EnrollmentData = enrollmentData,
                     Categories = categories.ToList()
                 };
             }
@@ -109,9 +174,6 @@ namespace ExcellyGenLMS.Application.Services.Admin
         {
             try
             {
-                _logger.LogInformation("Getting course availability analytics data");
-
-                // Get course counts by category
                 string sql = @"
                     SELECT cc.Title AS Name, COUNT(c.Id) AS Value 
                     FROM CourseCategories cc
@@ -121,19 +183,10 @@ namespace ExcellyGenLMS.Application.Services.Admin
                     ORDER BY Value DESC";
 
                 var availabilityData = await _dbConnection.QueryAsync<ChartDataDto>(sql);
-
-                // Assign colors to make chart visually appealing
-                string[] colors = { "#8884d8", "#83a6ed", "#8dd1e1", "#82ca9d", "#a4de6c", "#d0ed57" };
-                int colorIndex = 0;
-
-                var availabilityWithColors = availabilityData.Select(item => {
-                    item.Color = colors[colorIndex++ % colors.Length];
-                    return item;
-                }).ToList();
-
+                
                 return new CourseAvailabilityDto
                 {
-                    AvailabilityData = availabilityWithColors
+                    AvailabilityData = availabilityData.ToList()
                 };
             }
             catch (Exception ex)
@@ -147,13 +200,11 @@ namespace ExcellyGenLMS.Application.Services.Admin
         {
             try
             {
-                _logger.LogInformation("Getting user distribution analytics data");
-
-                // Count unique users by role - SQL Server specific JSON handling
                 string sql = @"
                     SELECT 
-                        r.value AS Name,
-                        COUNT(DISTINCT u.Id) AS Value
+                        r.value AS Role,
+                        COUNT(CASE WHEN u.Status = 'active' THEN 1 END) AS Active,
+                        COUNT(CASE WHEN u.Status = 'inactive' THEN 1 END) AS Inactive
                     FROM 
                         Users u
                     CROSS APPLY 
@@ -161,26 +212,13 @@ namespace ExcellyGenLMS.Application.Services.Admin
                     GROUP BY 
                         r.value
                     ORDER BY 
-                        Value DESC";
+                        (COUNT(CASE WHEN u.Status = 'active' THEN 1 END) + COUNT(CASE WHEN u.Status = 'inactive' THEN 1 END)) DESC";
 
-                var distributionData = await _dbConnection.QueryAsync<ChartDataDto>(sql);
-
-                // Assign colors for the pie chart (match your frontend theme)
-                string[] roleColors = {
-                    "#52007C", // Admin - Purple
-                    "#BF4BF6", // CourseCoordinator - Light Purple
-                    "#D68BF9", // Learner - Lighter Purple
-                    "#E6E6FA"  // ProjectManager - Lightest Purple
-                };
-
-                var rolesWithColors = distributionData.Select((item, index) => {
-                    item.Color = roleColors[index % roleColors.Length];
-                    return item;
-                }).ToList();
+                var distributionData = await _dbConnection.QueryAsync<UserDistributionItemDto>(sql);
 
                 return new UserDistributionDto
                 {
-                    DistributionData = rolesWithColors
+                    DistributionData = distributionData.ToList()
                 };
             }
             catch (Exception ex)

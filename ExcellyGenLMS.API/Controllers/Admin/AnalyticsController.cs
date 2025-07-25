@@ -24,19 +24,35 @@ namespace ExcellyGenLMS.API.Controllers.Admin
             _logger = logger;
         }
 
-        [HttpGet("dashboard")]
-        public async Task<ActionResult<DashboardAnalyticsDto>> GetDashboardAnalytics([FromQuery] string? categoryId = null)
+        [HttpGet("kpi-summary")]
+        public async Task<ActionResult<KpiSummaryDto>> GetKpiSummary()
         {
             try
             {
-                _logger.LogInformation("Getting dashboard analytics");
-                var analytics = await _analyticsService.GetDashboardAnalyticsAsync(categoryId);
-                return Ok(analytics);
+                _logger.LogInformation("Getting KPI summary.");
+                var summary = await _analyticsService.GetKpiSummaryAsync();
+                return Ok(summary);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error getting dashboard analytics");
-                return StatusCode(500, new { message = "An error occurred while retrieving analytics data." });
+                _logger.LogError(ex, "Error getting KPI summary.");
+                return StatusCode(500, new { message = "An error occurred while retrieving KPI summary data." });
+            }
+        }
+
+        [HttpGet("enrollment-kpis")]
+        public async Task<ActionResult<EnrollmentKpiDto>> GetEnrollmentKpis()
+        {
+            try
+            {
+                _logger.LogInformation("Getting enrollment KPIs.");
+                var kpis = await _analyticsService.GetEnrollmentKpiAsync();
+                return Ok(kpis);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting enrollment KPIs.");
+                return StatusCode(500, new { message = "An error occurred while retrieving enrollment KPI data." });
             }
         }
 
