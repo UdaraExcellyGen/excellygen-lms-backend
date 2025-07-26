@@ -20,6 +20,9 @@ namespace ExcellyGenLMS.Application.Services.Course
         private readonly IFileStorageService _fileStorageService;
         private readonly ILogger<LearnerCourseService> _logger;
         private readonly IQuizAttemptRepository _quizAttemptRepository;
+        private readonly IDocumentProgressRepository _documentProgressRepository;
+        private readonly ICourseDocumentRepository _courseDocumentRepository;
+        private readonly ILessonRepository _lessonRepository;
 
         public LearnerCourseService(
             ICourseRepository courseRepository,
@@ -28,7 +31,10 @@ namespace ExcellyGenLMS.Application.Services.Course
             IQuizService quizService,
             IFileStorageService fileStorageService,
             ILogger<LearnerCourseService> logger,
-            IQuizAttemptRepository quizAttemptRepository)
+            IQuizAttemptRepository quizAttemptRepository,
+            IDocumentProgressRepository documentProgressRepository,
+            ICourseDocumentRepository courseDocumentRepository,
+            ILessonRepository lessonRepository)
         {
             _courseRepository = courseRepository;
             _enrollmentRepository = enrollmentRepository;
@@ -37,6 +43,9 @@ namespace ExcellyGenLMS.Application.Services.Course
             _fileStorageService = fileStorageService;
             _logger = logger;
             _quizAttemptRepository = quizAttemptRepository;
+            _documentProgressRepository = documentProgressRepository;
+            _courseDocumentRepository = courseDocumentRepository;
+            _lessonRepository = lessonRepository;
         }
 
         public async Task<IEnumerable<LearnerCourseDto>> GetAvailableCoursesAsync(string userId, string? categoryId = null)
@@ -65,14 +74,18 @@ namespace ExcellyGenLMS.Application.Services.Course
 
                 var enrolledCourseIds = enrollments.Select(e => e.CourseId).ToList();
 
-                var allLessons = (await _courseRepository.GetLessonsByCourseIdsAsync(enrolledCourseIds)).ToLookup(l => l.CourseId);
-                var allProgresses = (await _lessonProgressRepository.GetProgressByUserIdAndCourseIdsAsync(userId, enrolledCourseIds)).ToDictionary(p => p.LessonId);
-                var allQuizzes = (await _quizService.GetQuizzesByCourseIdsAsync(enrolledCourseIds)).ToLookup(q => q.LessonId);
+                var allLessonsLookup = (await _courseRepository.GetLessonsByCourseIdsAsync(enrolledCourseIds)).ToLookup(l => l.CourseId);
+                var allQuizzesLookup = (await _quizService.GetQuizzesByCourseIdsAsync(enrolledCourseIds)).ToLookup(q => q.LessonId);
 
-                var allQuizIds = allQuizzes.SelectMany(q => q).Select(q => q.QuizId).ToList();
+                var allQuizIds = allQuizzesLookup.SelectMany(q => q).Select(q => q.QuizId).ToList();
                 var lastAttemptByQuizId = (await _quizAttemptRepository.GetCompletedAttemptsByUserAndQuizzesAsync(userId, allQuizIds))
                                           .GroupBy(a => a.QuizId)
                                           .ToDictionary(g => g.Key, g => g.OrderByDescending(a => a.CompletionTime).First());
+
+                var completedDocumentIds = (await _documentProgressRepository.GetProgressByUserIdAndCourseIdsAsync(userId, enrolledCourseIds))
+                                            .Where(p => p.IsCompleted)
+                                            .Select(p => p.DocumentId)
+                                            .ToHashSet();
 
                 var enrolledCourses = new List<LearnerCourseDto>();
                 foreach (var enrollment in enrollments)
@@ -84,39 +97,71 @@ namespace ExcellyGenLMS.Application.Services.Course
                     }
 
                     var course = enrollment.Course;
-                    var courseLessons = allLessons[course.Id].ToList();
-                    var learnerLessons = courseLessons.Select(lesson =>
-                    {
-                        allProgresses.TryGetValue(lesson.Id, out var progress);
-                        var quizForLesson = allQuizzes[lesson.Id].FirstOrDefault();
-                        lastAttemptByQuizId.TryGetValue(quizForLesson?.QuizId ?? 0, out var lastAttempt);
+                    var courseLessonsFromLookup = allLessonsLookup[course.Id].ToList();
 
-                        return new LearnerLessonDto
+                    // ==========================================================
+                    // === START: CORRECTED PROGRESS CALCULATION LOGIC        ===
+                    // ==========================================================
+                    int totalCourseItems = 0;
+                    int completedCourseItems = 0;
+                    int completedLessonsCount = 0;
+
+                    var learnerLessons = new List<LearnerLessonDto>();
+
+                    foreach (var lesson in courseLessonsFromLookup)
+                    {
+                        var quizForLesson = allQuizzesLookup[lesson.Id].FirstOrDefault();
+                        lastAttemptByQuizId.TryGetValue(quizForLesson?.QuizId ?? 0, out var lastAttempt);
+                        bool isQuizCompletedForLesson = lastAttempt != null;
+
+                        var learnerDocuments = lesson.Documents?.Select(d => new CourseDocumentDto
+                        {
+                            Id = d.Id,
+                            Name = d.Name,
+                            DocumentType = d.DocumentType,
+                            FileSize = d.FileSize,
+                            FileUrl = d.FilePath != null ? _fileStorageService.GetFileUrl(d.FilePath) : string.Empty,
+                            LastUpdatedDate = d.LastUpdatedDate,
+                            LessonId = d.LessonId,
+                            IsCompleted = completedDocumentIds.Contains(d.Id)
+                        }).ToList() ?? new List<CourseDocumentDto>();
+
+                        // Step 1: Count items for THIS lesson
+                        int docsInLesson = learnerDocuments.Count;
+                        int completedDocsInLesson = learnerDocuments.Count(d => d.IsCompleted);
+                        int quizInLesson = quizForLesson != null ? 1 : 0;
+                        int completedQuizInLesson = isQuizCompletedForLesson ? 1 : 0;
+
+                        // Step 2: Add this lesson's counts to the course-wide totals
+                        totalCourseItems += docsInLesson + quizInLesson;
+                        completedCourseItems += completedDocsInLesson + completedQuizInLesson;
+
+                        // Step 3: Determine if the lesson itself is fully complete
+                        bool isLessonFullyCompleted = (docsInLesson + quizInLesson > 0) && (completedDocsInLesson + completedQuizInLesson) == (docsInLesson + quizInLesson);
+                        if (isLessonFullyCompleted)
+                        {
+                            completedLessonsCount++;
+                        }
+
+                        learnerLessons.Add(new LearnerLessonDto
                         {
                             Id = lesson.Id,
                             LessonName = lesson.LessonName,
                             LessonPoints = lesson.LessonPoints,
-                            IsCompleted = progress?.IsCompleted ?? false,
+                            LastUpdatedDate = lesson.LastUpdatedDate,
+                            Documents = learnerDocuments,
+                            IsCompleted = isLessonFullyCompleted,
                             HasQuiz = quizForLesson != null,
                             QuizId = quizForLesson?.QuizId,
-                            IsQuizCompleted = lastAttempt != null,
-                            LastAttemptId = lastAttempt?.QuizAttemptId,
-                            Documents = lesson.Documents?.Select(d => new CourseDocumentDto
-                            {
-                                Id = d.Id,
-                                Name = d.Name,
-                                DocumentType = d.DocumentType,
-                                FileSize = d.FileSize,
-                                FileUrl = d.FilePath != null ? _fileStorageService.GetFileUrl(d.FilePath) : string.Empty,
-                                LastUpdatedDate = d.LastUpdatedDate,
-                                LessonId = d.LessonId
-                            }).ToList() ?? new List<CourseDocumentDto>()
-                        };
-                    }).ToList();
+                            IsQuizCompleted = isQuizCompletedForLesson,
+                            LastAttemptId = lastAttempt?.QuizAttemptId
+                        });
+                    }
+                    // ========================================================
+                    // === END: CORRECTED PROGRESS CALCULATION LOGIC        ===
+                    // ========================================================
 
-                    int completedLessonsCount = learnerLessons.Count(l => l.IsCompleted);
-                    int totalLessonsCount = learnerLessons.Count;
-                    int progressPercentage = totalLessonsCount > 0 ? (int)Math.Round((double)completedLessonsCount / totalLessonsCount * 100) : 0;
+                    int progressPercentage = totalCourseItems > 0 ? (int)Math.Round((double)completedCourseItems / totalCourseItems * 100) : 0;
 
                     enrolledCourses.Add(new LearnerCourseDto
                     {
@@ -126,20 +171,19 @@ namespace ExcellyGenLMS.Application.Services.Course
                         EstimatedTime = course.EstimatedTime,
                         IsInactive = course.IsInactive,
                         ThumbnailUrl = course.ThumbnailImagePath != null ? _fileStorageService.GetFileUrl(course.ThumbnailImagePath) : string.Empty,
+                        Creator = new UserBasicDto { Id = course.Creator.Id, Name = course.Creator.Name },
                         Category = course.Category != null
                             ? new CategoryDto { Id = course.Category.Id, Title = course.Category.Title }
                             : new CategoryDto { Id = "uncategorized", Title = "Uncategorized" },
-                        Technologies = course.CourseTechnologies?
-                            .Where(ct => ct.Technology != null)
-                            .Select(ct => new TechnologyDto { Id = ct.Technology.Id, Name = ct.Technology.Name })
-                            .ToList() ?? new List<TechnologyDto>(),
+                        Technologies = course.CourseTechnologies?.Where(ct => ct.Technology != null)
+                            .Select(ct => new TechnologyDto { Id = ct.Technology.Id, Name = ct.Technology.Name }).ToList() ?? new List<TechnologyDto>(),
                         Status = course.Status,
                         IsEnrolled = true,
                         EnrollmentDate = enrollment.EnrollmentDate,
                         EnrollmentStatus = enrollment.Status,
                         EnrollmentId = enrollment.Id,
                         ProgressPercentage = progressPercentage,
-                        TotalLessons = totalLessonsCount,
+                        TotalLessons = courseLessonsFromLookup.Count,
                         CompletedLessons = completedLessonsCount,
                         Lessons = learnerLessons
                     });
@@ -159,64 +203,42 @@ namespace ExcellyGenLMS.Application.Services.Course
             return enrolledCourses.FirstOrDefault(c => c.Id == courseId);
         }
 
-        public async Task<LessonProgressDto> MarkLessonCompletedAsync(string userId, int lessonId)
+        public async Task<DocumentProgressDto> MarkDocumentCompletedAsync(string userId, int documentId)
         {
-            var lesson = await _courseRepository.GetLessonWithDocumentsAsync(lessonId) ?? throw new KeyNotFoundException($"Lesson with ID {lessonId} not found.");
-            var enrollment = await _enrollmentRepository.GetEnrollmentByUserIdAndCourseIdAsync(userId, lesson.CourseId) ?? throw new InvalidOperationException($"User not enrolled in course {lesson.CourseId}.");
+            _logger.LogInformation("Attempting to mark document {DocumentId} as complete for user {UserId}", documentId, userId);
 
-            var progress = await _lessonProgressRepository.GetProgressByUserIdAndLessonIdAsync(userId, lessonId);
+            var document = await _courseDocumentRepository.GetByIdAsync(documentId) ?? throw new KeyNotFoundException($"Document with ID {documentId} not found.");
+
+            var lesson = await _lessonRepository.GetByIdAsync(document.LessonId) ?? throw new KeyNotFoundException($"Lesson for document {documentId} not found.");
+
+            _ = await _enrollmentRepository.GetEnrollmentByUserIdAndCourseIdAsync(userId, lesson.CourseId) ?? throw new InvalidOperationException($"User not enrolled in course {lesson.CourseId}.");
+
+            var progress = await _documentProgressRepository.GetProgressByUserIdAndDocumentIdAsync(userId, documentId);
             if (progress == null)
             {
-                progress = new LessonProgress { UserId = userId, LessonId = lessonId, IsCompleted = true, CompletionDate = DateTime.UtcNow };
-                await _lessonProgressRepository.AddAsync(progress);
+                progress = new DocumentProgress { UserId = userId, DocumentId = documentId, IsCompleted = true, CompletionDate = DateTime.UtcNow };
+                await _documentProgressRepository.AddAsync(progress);
             }
             else if (!progress.IsCompleted)
             {
                 progress.IsCompleted = true;
                 progress.CompletionDate = DateTime.UtcNow;
-                await _lessonProgressRepository.UpdateAsync(progress);
+                await _documentProgressRepository.UpdateAsync(progress);
             }
 
-            // --- START: MODIFIED LOGIC ---
-            // Get all lesson IDs for the course
-            var lessonsInCourse = (await _courseRepository.GetLessonsByCourseIdAsync(lesson.CourseId)).Select(l => l.Id).ToHashSet();
-
-            // Get all of the user's completed lessons for this course
-            var completedLessonsForCourse = (await _lessonProgressRepository.GetProgressByUserIdAndCourseIdAsync(userId, lesson.CourseId))
-                                             .Where(p => p.IsCompleted)
-                                             .Select(p => p.LessonId)
-                                             .ToHashSet();
-
-            // Check if the set of completed lessons contains all the lessons for the course
-            if (lessonsInCourse.Any() && lessonsInCourse.IsSubsetOf(completedLessonsForCourse))
+            return new DocumentProgressDto
             {
-                // Only update if it's not already marked as completed
-                if (enrollment.CompletionDate == null)
-                {
-                    _logger.LogInformation("All lessons completed for course {CourseId} by user {UserId}. Marking enrollment as complete.", lesson.CourseId, userId);
-                    enrollment.Status = "completed";
-                    enrollment.CompletionDate = DateTime.UtcNow; // Set the completion date
-                    await _enrollmentRepository.UpdateEnrollmentAsync(enrollment);
-                }
-            }
-            // --- END: MODIFIED LOGIC ---
-
-            return new LessonProgressDto
-            {
-                Id = progress.Id,
-                UserId = progress.UserId,
-                LessonId = progress.LessonId,
-                LessonName = lesson.LessonName,
-                IsCompleted = progress.IsCompleted,
-                CompletionDate = progress.CompletionDate
+                DocumentId = progress.DocumentId,
+                IsCompleted = progress.IsCompleted
             };
         }
 
         public async Task<bool> HasLearnerCompletedAllCourseContentAsync(string userId, int courseId)
         {
-            var enrollment = await _enrollmentRepository.GetEnrollmentByUserIdAndCourseIdAsync(userId, courseId);
-            // The reliable check is now the CompletionDate, not the status string
-            return enrollment?.CompletionDate != null;
+            var details = await GetLearnerCourseDetailsAsync(userId, courseId);
+            // Added more detailed logging
+            _logger.LogInformation("Checking course completion for user {UserId}, course {CourseId}. Calculated Percentage: {Percentage}%", userId, courseId, details?.ProgressPercentage ?? -1);
+            return details?.ProgressPercentage == 100;
         }
 
         private LearnerCourseDto MapCourseToLightweightDto(Core.Entities.Course.Course course, bool isEnrolled, Enrollment? enrollment = null)
@@ -229,13 +251,8 @@ namespace ExcellyGenLMS.Application.Services.Course
                 EstimatedTime = course.EstimatedTime,
                 IsInactive = course.IsInactive,
                 ThumbnailUrl = course.ThumbnailImagePath != null ? _fileStorageService.GetFileUrl(course.ThumbnailImagePath) : string.Empty,
-                Category = course.Category != null
-                    ? new CategoryDto { Id = course.Category.Id, Title = course.Category.Title }
-                    : new CategoryDto { Id = "uncategorized", Title = "Uncategorized" },
-                Technologies = course.CourseTechnologies?
-                    .Where(ct => ct.Technology != null)
-                    .Select(ct => new TechnologyDto { Id = ct.Technology.Id, Name = ct.Technology.Name })
-                    .ToList() ?? new List<TechnologyDto>(),
+                Category = course.Category != null ? new CategoryDto { Id = course.Category.Id, Title = course.Category.Title } : new CategoryDto { Id = "uncategorized", Title = "Uncategorized" },
+                Technologies = course.CourseTechnologies?.Where(ct => ct.Technology != null).Select(ct => new TechnologyDto { Id = ct.Technology.Id, Name = ct.Technology.Name }).ToList() ?? new List<TechnologyDto>(),
                 Status = course.Status,
                 IsEnrolled = isEnrolled,
                 EnrollmentDate = enrollment?.EnrollmentDate,

@@ -4,6 +4,7 @@ using ExcellyGenLMS.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace ExcellyGenLMS.Infrastructure.Data.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250725182318_AddDocumentProgressTracking-s")]
+    partial class AddDocumentProgressTrackings
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -30,12 +33,6 @@ namespace ExcellyGenLMS.Infrastructure.Data.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<string>("CreatedById")
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("datetime2");
-
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasMaxLength(500)
@@ -45,9 +42,6 @@ namespace ExcellyGenLMS.Infrastructure.Data.Migrations
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -63,8 +57,6 @@ namespace ExcellyGenLMS.Infrastructure.Data.Migrations
                         .HasColumnType("datetime2");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("CreatedById");
 
                     b.ToTable("CourseCategories");
                 });
@@ -1503,15 +1495,6 @@ namespace ExcellyGenLMS.Infrastructure.Data.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("PMRoleDefinitions");
-                });
-
-            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Admin.CourseCategory", b =>
-                {
-                    b.HasOne("ExcellyGenLMS.Core.Entities.Auth.User", "Creator")
-                        .WithMany()
-                        .HasForeignKey("CreatedById");
-
-                    b.Navigation("Creator");
                 });
 
             modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Auth.RefreshToken", b =>

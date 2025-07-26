@@ -22,8 +22,15 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
         {
             return await _context.Enrollments
                                  .Include(e => e.User)
+                                 // === START: CORRECTED INCLUDES ===
+                                 .Include(e => e.Course)
+                                     .ThenInclude(c => c!.Creator)
                                  .Include(e => e.Course)
                                      .ThenInclude(c => c!.Category)
+                                 .Include(e => e.Course)
+                                     .ThenInclude(c => c!.CourseTechnologies)
+                                        .ThenInclude(ct => ct.Technology)
+                                 // === END: CORRECTED INCLUDES ===
                                  .ToListAsync();
         }
 
@@ -31,8 +38,15 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
         {
             return await _context.Enrollments
                                  .Include(e => e.User)
+                                 // === START: CORRECTED INCLUDES ===
+                                 .Include(e => e.Course)
+                                     .ThenInclude(c => c!.Creator)
                                  .Include(e => e.Course)
                                      .ThenInclude(c => c!.Category)
+                                 .Include(e => e.Course)
+                                     .ThenInclude(c => c!.CourseTechnologies)
+                                        .ThenInclude(ct => ct.Technology)
+                                 // === END: CORRECTED INCLUDES ===
                                  .FirstOrDefaultAsync(e => e.Id == id);
         }
 
@@ -40,8 +54,15 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
         {
             return await _context.Enrollments
                                  .Include(e => e.User)
+                                 // === START: CORRECTED INCLUDES ===
+                                 .Include(e => e.Course)
+                                     .ThenInclude(c => c!.Creator)
                                  .Include(e => e.Course)
                                      .ThenInclude(c => c!.Category)
+                                 .Include(e => e.Course)
+                                     .ThenInclude(c => c!.CourseTechnologies)
+                                        .ThenInclude(ct => ct.Technology)
+                                 // === END: CORRECTED INCLUDES ===
                                  .FirstOrDefaultAsync(e => e.UserId == userId && e.CourseId == courseId);
         }
 
@@ -50,8 +71,15 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
             return await _context.Enrollments
                                  .Where(e => e.UserId == userId)
                                  .Include(e => e.User)
+                                 // === START: CORRECTED INCLUDES ===
+                                 .Include(e => e.Course)
+                                     .ThenInclude(c => c!.Creator)
                                  .Include(e => e.Course)
                                      .ThenInclude(c => c!.Category)
+                                 .Include(e => e.Course)
+                                     .ThenInclude(c => c!.CourseTechnologies)
+                                        .ThenInclude(ct => ct.Technology)
+                                 // === END: CORRECTED INCLUDES ===
                                  .ToListAsync();
         }
 

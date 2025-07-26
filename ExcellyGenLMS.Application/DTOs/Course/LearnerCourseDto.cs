@@ -2,6 +2,7 @@
 using ExcellyGenLMS.Core.Enums; // For CourseStatus
 using System;
 using System.Collections.Generic;
+using ExcellyGenLMS.Application.DTOs.Auth;
 
 namespace ExcellyGenLMS.Application.DTOs.Course
 {
@@ -32,6 +33,7 @@ namespace ExcellyGenLMS.Application.DTOs.Course
         public List<TechnologyDto> Technologies { get; set; } = new();
         public CourseStatus Status { get; set; } // Course status (e.g., Draft, Published)
         public bool IsInactive { get; set; }
+        public UserBasicDto Creator { get; set; } = null!;
 
         // Learner-specific fields
         public bool IsEnrolled { get; set; }
