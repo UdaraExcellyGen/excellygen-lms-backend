@@ -60,6 +60,7 @@ namespace ExcellyGenLMS.Infrastructure.Data
         public DbSet<PMRoleDefinition> PMRoleDefinitions { get; set; } = null!;
         public DbSet<PMNotification> PMNotifications { get; set; } = null!;
         public DbSet<UserActivityLog> UserActivityLogs { get; set; } = null!;
+        public DbSet<DocumentProgress> DocumentProgress { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -408,6 +409,20 @@ namespace ExcellyGenLMS.Infrastructure.Data
                       .HasForeignKey(lp => lp.LessonId)
                       .OnDelete(DeleteBehavior.Cascade);
                 entity.HasIndex(lp => new { lp.UserId, lp.LessonId }).IsUnique();
+            });
+
+            modelBuilder.Entity<DocumentProgress>(entity =>
+            {
+                entity.HasKey(dp => dp.Id);
+                entity.HasOne(dp => dp.User)
+                      .WithMany()
+                      .HasForeignKey(dp => dp.UserId)
+                      .OnDelete(DeleteBehavior.Cascade);
+                entity.HasOne(dp => dp.Document)
+                      .WithMany()
+                      .HasForeignKey(dp => dp.DocumentId)
+                      .OnDelete(DeleteBehavior.Cascade);
+                entity.HasIndex(dp => new { dp.UserId, dp.DocumentId }).IsUnique();
             });
 
             modelBuilder.Entity<PMProject>().HasKey(e => e.Id);
