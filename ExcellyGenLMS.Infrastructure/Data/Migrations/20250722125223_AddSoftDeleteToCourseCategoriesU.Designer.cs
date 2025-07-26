@@ -4,6 +4,7 @@ using ExcellyGenLMS.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace ExcellyGenLMS.Infrastructure.Data.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250722125223_AddSoftDeleteToCourseCategoriesU")]
+    partial class AddSoftDeleteToCourseCategoriesU
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -29,9 +32,6 @@ namespace ExcellyGenLMS.Infrastructure.Data.Migrations
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
-
-                    b.Property<string>("CreatedById")
-                        .HasColumnType("nvarchar(450)");
 
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("datetime2");
@@ -63,8 +63,6 @@ namespace ExcellyGenLMS.Infrastructure.Data.Migrations
                         .HasColumnType("datetime2");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("CreatedById");
 
                     b.ToTable("CourseCategories");
                 });
@@ -345,37 +343,6 @@ namespace ExcellyGenLMS.Infrastructure.Data.Migrations
                     b.HasIndex("TechnologyId");
 
                     b.ToTable("CourseTechnologies");
-                });
-
-            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Course.DocumentProgress", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime?>("CompletionDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int>("DocumentId")
-                        .HasColumnType("int");
-
-                    b.Property<bool>("IsCompleted")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("DocumentId");
-
-                    b.HasIndex("UserId", "DocumentId")
-                        .IsUnique();
-
-                    b.ToTable("DocumentProgress");
                 });
 
             modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Course.Enrollment", b =>
@@ -1505,15 +1472,6 @@ namespace ExcellyGenLMS.Infrastructure.Data.Migrations
                     b.ToTable("PMRoleDefinitions");
                 });
 
-            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Admin.CourseCategory", b =>
-                {
-                    b.HasOne("ExcellyGenLMS.Core.Entities.Auth.User", "Creator")
-                        .WithMany()
-                        .HasForeignKey("CreatedById");
-
-                    b.Navigation("Creator");
-                });
-
             modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Auth.RefreshToken", b =>
                 {
                     b.HasOne("ExcellyGenLMS.Core.Entities.Auth.User", "User")
@@ -1591,25 +1549,6 @@ namespace ExcellyGenLMS.Infrastructure.Data.Migrations
                     b.Navigation("Course");
 
                     b.Navigation("Technology");
-                });
-
-            modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Course.DocumentProgress", b =>
-                {
-                    b.HasOne("ExcellyGenLMS.Core.Entities.Course.CourseDocument", "Document")
-                        .WithMany()
-                        .HasForeignKey("DocumentId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("ExcellyGenLMS.Core.Entities.Auth.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Document");
-
-                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("ExcellyGenLMS.Core.Entities.Course.Enrollment", b =>
