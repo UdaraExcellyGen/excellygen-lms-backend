@@ -23,6 +23,7 @@ namespace ExcellyGenLMS.Application.Services.ProjectManager
         private readonly IUserRepository _userRepository;
         private readonly IUserTechnologyRepository _userTechnologyRepository;
         private readonly ILearnerNotificationService _notificationService;
+        private readonly IPMTechnologyService _pmTechnologyService;
         private readonly ILogger<EmployeeAssignmentService> _logger;
 
         public EmployeeAssignmentService(
@@ -31,6 +32,7 @@ namespace ExcellyGenLMS.Application.Services.ProjectManager
             IUserRepository userRepository,
             IUserTechnologyRepository userTechnologyRepository,
             ILearnerNotificationService notificationService,
+            IPMTechnologyService pmTechnologyService,
             ILogger<EmployeeAssignmentService> logger)
         {
             _assignmentRepository = assignmentRepository;
@@ -38,6 +40,7 @@ namespace ExcellyGenLMS.Application.Services.ProjectManager
             _userRepository = userRepository;
             _userTechnologyRepository = userTechnologyRepository;
             _notificationService = notificationService;
+            _pmTechnologyService = pmTechnologyService;
             _logger = logger;
         }
 
@@ -472,6 +475,103 @@ namespace ExcellyGenLMS.Application.Services.ProjectManager
             {
                 _logger.LogWarning(ex, $"Error getting skills for employee {employeeId}");
                 return new List<string>();
+            }
+        }
+
+        // IMPROVED DASHBOARD STATS METHOD
+        public async Task<ProjectManagerDashboardStatsDto> GetDashboardStatsAsync()
+        {
+            _logger.LogInformation("Getting Project Manager dashboard statistics - IMPROVED VERSION");
+
+            try
+            {
+                // Get all active employees
+                var allUsers = await _userRepository.GetAllUsersAsync();
+                var activeEmployees = allUsers.Where(u => u.Status == "active").ToList();
+                var activeEmployeeIds = activeEmployees.Select(e => e.Id).ToList();
+
+                _logger.LogInformation($"Found {activeEmployees.Count} active employees");
+
+                // Get all projects
+                var allProjects = await _projectRepository.GetAllAsync();
+                var activeProjects = allProjects.Where(p => p.Status == "Active").ToList();
+
+                _logger.LogInformation($"Found {allProjects.Count()} total projects, {activeProjects.Count} active");
+
+                // Get employee workloads in bulk
+                var employeeWorkloads = await _assignmentRepository.GetEmployeesCurrentWorkloadAsync(activeEmployeeIds);
+                
+                _logger.LogInformation($"Retrieved workloads for {employeeWorkloads.Count} employees");
+
+                // Get all assignments to calculate project metrics
+                var allAssignments = await _assignmentRepository.GetAllAsync();
+                var activeProjectAssignments = allAssignments.Where(a => 
+                    activeProjects.Any(p => p.Id == a.ProjectId)).ToList();
+
+                _logger.LogInformation($"Found {allAssignments.Count()} total assignments, {activeProjectAssignments.Count} for active projects");
+
+                // Calculate employee metrics with detailed logging
+                var employeesOnProjects = employeeWorkloads.Count(w => w.Value > 0);
+                var availableEmployees = activeEmployees.Count - employeesOnProjects;
+                var fullyUtilizedEmployees = employeeWorkloads.Count(w => w.Value >= 80);
+
+                _logger.LogInformation($"Employee metrics: OnProjects={employeesOnProjects}, Available={availableEmployees}, FullyUtilized={fullyUtilizedEmployees}");
+
+                // Alternative calculation for employees on projects (more direct approach)
+                var employeesWithAssignments = allAssignments
+                    .Where(a => activeProjects.Any(p => p.Id == a.ProjectId))
+                    .Select(a => a.EmployeeId)
+                    .Distinct()
+                    .Count();
+
+                _logger.LogInformation($"Alternative calculation - Employees with active assignments: {employeesWithAssignments}");
+
+                // Use the higher of the two calculations (more accurate)
+                var finalEmployeesOnProjects = Math.Max(employeesOnProjects, employeesWithAssignments);
+
+                // Calculate project metrics
+                var projectsWithEmployees = activeProjectAssignments
+                    .Select(a => a.ProjectId)
+                    .Distinct()
+                    .Count();
+
+                // Get technology metrics
+                var allTechnologies = await _pmTechnologyService.GetTechnologiesAsync();
+                var technologies = allTechnologies.ToList();
+
+                var stats = new ProjectManagerDashboardStatsDto
+                {
+                    Projects = new ProjectStatsDto
+                    {
+                        Total = allProjects.Count(),
+                        Active = activeProjects.Count(),
+                        WithEmployees = projectsWithEmployees
+                    },
+                    Employees = new EmployeeStatsDto
+                    {
+                        Total = activeEmployees.Count,
+                        OnProjects = finalEmployeesOnProjects,  // Using the more accurate calculation
+                        Available = Math.Max(0, activeEmployees.Count - finalEmployeesOnProjects),
+                        FullyUtilized = fullyUtilizedEmployees
+                    },
+                    Technologies = new TechnologyStatsDto
+                    {
+                        Total = technologies.Count,
+                        Active = technologies.Count(t => t.Status == "active")
+                    }
+                };
+
+                _logger.LogInformation($"Final dashboard stats calculated - " +
+                                     $"Projects: {stats.Projects.Total}/{stats.Projects.Active} (WithEmployees: {stats.Projects.WithEmployees}), " +
+                                     $"Employees: {stats.Employees.Total} (OnProjects: {stats.Employees.OnProjects}, Available: {stats.Employees.Available}, FullyUtilized: {stats.Employees.FullyUtilized}), " +
+                                     $"Technologies: {stats.Technologies.Total}/{stats.Technologies.Active}");
+
+                return stats;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error calculating dashboard statistics");
+                throw;
             }
         }
 
