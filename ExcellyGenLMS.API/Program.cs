@@ -285,6 +285,7 @@ static void RegisterRepositories(IServiceCollection services)
     services.AddScoped<ICourseDocumentRepository, CourseDocumentRepository>();
     services.AddScoped<IEnrollmentRepository, EnrollmentRepository>();
     services.AddScoped<ILessonProgressRepository, LessonProgressRepository>();
+    services.AddScoped<IDocumentProgressRepository, DocumentProgressRepository>();
     services.AddScoped<ICertificateRepository, CertificateRepository>();
     services.AddScoped<IExternalCertificateRepository, ExternalCertificateRepository>();
     services.AddScoped<IQuizRepository, QuizRepository>();

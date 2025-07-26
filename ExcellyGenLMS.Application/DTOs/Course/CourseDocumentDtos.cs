@@ -12,6 +12,7 @@ namespace ExcellyGenLMS.Application.DTOs.Course
         public required string FileUrl { get; set; } // Publicly accessible URL from file service
         public DateTime LastUpdatedDate { get; set; }
         public int LessonId { get; set; }
+        public bool IsCompleted { get; set; }
     }
 
     // --- DTO for Upload Response (or use CourseDocumentDto) ---
