@@ -64,6 +64,8 @@ namespace ExcellyGenLMS.Application.Services.Course
             return availableCourses;
         }
 
+        // Replace the GetEnrolledCoursesAsync method in LearnerCourseService.cs with this fixed version
+
         public async Task<IEnumerable<LearnerCourseDto>> GetEnrolledCoursesAsync(string userId)
         {
             try
@@ -100,7 +102,7 @@ namespace ExcellyGenLMS.Application.Services.Course
                     var courseLessonsFromLookup = allLessonsLookup[course.Id].ToList();
 
                     // ==========================================================
-                    // === START: CORRECTED PROGRESS CALCULATION LOGIC        ===
+                    // === START: FIXED PROGRESS CALCULATION LOGIC            ===
                     // ==========================================================
                     int totalCourseItems = 0;
                     int completedCourseItems = 0;
@@ -126,11 +128,15 @@ namespace ExcellyGenLMS.Application.Services.Course
                             IsCompleted = completedDocumentIds.Contains(d.Id)
                         }).ToList() ?? new List<CourseDocumentDto>();
 
-                        // Step 1: Count items for THIS lesson
+                        // Step 1: Count items for THIS lesson (with validation)
                         int docsInLesson = learnerDocuments.Count;
                         int completedDocsInLesson = learnerDocuments.Count(d => d.IsCompleted);
                         int quizInLesson = quizForLesson != null ? 1 : 0;
                         int completedQuizInLesson = isQuizCompletedForLesson ? 1 : 0;
+
+                        // FIXED: Add debug logging for progress calculation
+                        _logger.LogDebug("Course {CourseId}, Lesson {LessonId}: Docs={DocsTotal}/{DocsCompleted}, Quiz={QuizTotal}/{QuizCompleted}",
+                            course.Id, lesson.Id, docsInLesson, completedDocsInLesson, quizInLesson, completedQuizInLesson);
 
                         // Step 2: Add this lesson's counts to the course-wide totals
                         totalCourseItems += docsInLesson + quizInLesson;
@@ -158,10 +164,24 @@ namespace ExcellyGenLMS.Application.Services.Course
                         });
                     }
                     // ========================================================
-                    // === END: CORRECTED PROGRESS CALCULATION LOGIC        ===
+                    // === END: FIXED PROGRESS CALCULATION LOGIC            ===
                     // ========================================================
 
-                    int progressPercentage = totalCourseItems > 0 ? (int)Math.Round((double)completedCourseItems / totalCourseItems * 100) : 0;
+                    // FIXED: Improved progress calculation with proper validation
+                    int progressPercentage = 0;
+                    if (totalCourseItems > 0)
+                    {
+                        progressPercentage = (int)Math.Round((double)completedCourseItems / totalCourseItems * 100);
+                        // Ensure progress is never negative or over 100%
+                        progressPercentage = Math.Max(0, Math.Min(100, progressPercentage));
+                    }
+
+                    // FIXED: Enhanced logging for debugging progress issues
+                    _logger.LogInformation("Course {CourseId} '{CourseTitle}' progress: {CompletedItems}/{TotalItems} = {ProgressPercentage}% (Enrollment: {EnrollmentDate})",
+                        course.Id, course.Title, completedCourseItems, totalCourseItems, progressPercentage, enrollment.EnrollmentDate);
+
+                    // Use course.Lessons.Count for consistency with available courses
+                    var totalLessonsCount = course.Lessons?.Count ?? 0;
 
                     enrolledCourses.Add(new LearnerCourseDto
                     {
@@ -183,8 +203,9 @@ namespace ExcellyGenLMS.Application.Services.Course
                         EnrollmentStatus = enrollment.Status,
                         EnrollmentId = enrollment.Id,
                         ProgressPercentage = progressPercentage,
-                        TotalLessons = courseLessonsFromLookup.Count,
+                        TotalLessons = totalLessonsCount,
                         CompletedLessons = completedLessonsCount,
+                        ActiveLearnersCount = course.Enrollments?.Count(e => e.Status == "active") ?? 0,
                         Lessons = learnerLessons
                     });
                 }
@@ -241,6 +262,7 @@ namespace ExcellyGenLMS.Application.Services.Course
             return details?.ProgressPercentage == 100;
         }
 
+        // FIXED: Using Course namespace UserBasicDto, no ambiguity
         private LearnerCourseDto MapCourseToLightweightDto(Core.Entities.Course.Course course, bool isEnrolled, Enrollment? enrollment = null)
         {
             return new LearnerCourseDto
@@ -251,13 +273,34 @@ namespace ExcellyGenLMS.Application.Services.Course
                 EstimatedTime = course.EstimatedTime,
                 IsInactive = course.IsInactive,
                 ThumbnailUrl = course.ThumbnailImagePath != null ? _fileStorageService.GetFileUrl(course.ThumbnailImagePath) : string.Empty,
-                Category = course.Category != null ? new CategoryDto { Id = course.Category.Id, Title = course.Category.Title } : new CategoryDto { Id = "uncategorized", Title = "Uncategorized" },
-                Technologies = course.CourseTechnologies?.Where(ct => ct.Technology != null).Select(ct => new TechnologyDto { Id = ct.Technology.Id, Name = ct.Technology.Name }).ToList() ?? new List<TechnologyDto>(),
+
+                // FIXED: Using Course namespace UserBasicDto with null safety
+                Creator = new UserBasicDto
+                {
+                    Id = course.Creator?.Id ?? "unknown",
+                    Name = course.Creator?.Name ?? "Unknown Creator"
+                },
+
+                Category = course.Category != null
+                    ? new CategoryDto { Id = course.Category.Id, Title = course.Category.Title }
+                    : new CategoryDto { Id = "uncategorized", Title = "Uncategorized" },
+
+                Technologies = course.CourseTechnologies?.Where(ct => ct.Technology != null)
+                    .Select(ct => new TechnologyDto { Id = ct.Technology.Id, Name = ct.Technology.Name })
+                    .ToList() ?? new List<TechnologyDto>(),
+
                 Status = course.Status,
                 IsEnrolled = isEnrolled,
                 EnrollmentDate = enrollment?.EnrollmentDate,
                 EnrollmentStatus = enrollment?.Status ?? "not_enrolled",
                 EnrollmentId = enrollment?.Id,
+
+                // FIXED: Add all missing properties that frontend expects
+                TotalLessons = course.Lessons?.Count ?? 0,
+                CompletedLessons = 0, // Always 0 for available courses
+                ProgressPercentage = 0, // Always 0 for available courses
+                ActiveLearnersCount = course.Enrollments?.Count(e => e.Status == "active") ?? 0,
+
                 Lessons = new List<LearnerLessonDto>()
             };
         }

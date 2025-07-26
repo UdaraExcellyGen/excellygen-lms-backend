@@ -1,5 +1,6 @@
 using ExcellyGenLMS.Core.Entities.Course;
 using ExcellyGenLMS.Core.Interfaces.Repositories.Course;
+using ExcellyGenLMS.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
@@ -45,6 +46,7 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
                 .ToListAsync();
         }
 
+        // FIXED: Added .Include(c => c.Enrollments) to support active learners count
         public async Task<IEnumerable<Core.Entities.Course.Course>> GetAllPublishedCoursesWithDetailsAsync()
         {
             return await _context.Courses
@@ -53,6 +55,7 @@ namespace ExcellyGenLMS.Infrastructure.Data.Repositories.Course
                 .Include(c => c.Creator)
                 .Include(c => c.CourseTechnologies).ThenInclude(ct => ct.Technology)
                 .Include(c => c.Lessons).ThenInclude(l => l.Documents)
+                .Include(c => c.Enrollments) // ADDED: Include enrollments for counting active learners
                 .AsSplitQuery()
                 .AsNoTracking()
                 .OrderBy(c => c.Title)
