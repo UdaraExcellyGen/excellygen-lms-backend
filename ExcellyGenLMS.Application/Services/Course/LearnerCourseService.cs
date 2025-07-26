@@ -1,4 +1,4 @@
-using ExcellyGenLMS.Application.DTOs.Course;
+﻿using ExcellyGenLMS.Application.DTOs.Course;
 using ExcellyGenLMS.Application.Interfaces.Course;
 using ExcellyGenLMS.Core.Entities.Course;
 using ExcellyGenLMS.Core.Interfaces.Infrastructure;
@@ -64,7 +64,7 @@ namespace ExcellyGenLMS.Application.Services.Course
             return availableCourses;
         }
 
-        // Replace the GetEnrolledCoursesAsync method in LearnerCourseService.cs with this fixed version
+        
 
         public async Task<IEnumerable<LearnerCourseDto>> GetEnrolledCoursesAsync(string userId)
         {
@@ -80,7 +80,10 @@ namespace ExcellyGenLMS.Application.Services.Course
                 var allQuizzesLookup = (await _quizService.GetQuizzesByCourseIdsAsync(enrolledCourseIds)).ToLookup(q => q.LessonId);
 
                 var allQuizIds = allQuizzesLookup.SelectMany(q => q).Select(q => q.QuizId).ToList();
-                var lastAttemptByQuizId = (await _quizAttemptRepository.GetCompletedAttemptsByUserAndQuizzesAsync(userId, allQuizIds))
+
+                // 🔥 FIXED: Get ALL attempts (pass or fail) instead of just completed ones
+                var lastAttemptByQuizId = (await _quizAttemptRepository.GetAttemptsByUserIdAsync(userId))
+                                          .Where(a => allQuizIds.Contains(a.QuizId) && a.CompletionTime.HasValue) // Any completed attempt
                                           .GroupBy(a => a.QuizId)
                                           .ToDictionary(g => g.Key, g => g.OrderByDescending(a => a.CompletionTime).First());
 
@@ -114,6 +117,8 @@ namespace ExcellyGenLMS.Application.Services.Course
                     {
                         var quizForLesson = allQuizzesLookup[lesson.Id].FirstOrDefault();
                         lastAttemptByQuizId.TryGetValue(quizForLesson?.QuizId ?? 0, out var lastAttempt);
+
+                        // 🔥 FIXED: Any attempt (pass or fail) counts as completion
                         bool isQuizCompletedForLesson = lastAttempt != null;
 
                         var learnerDocuments = lesson.Documents?.Select(d => new CourseDocumentDto
@@ -159,7 +164,7 @@ namespace ExcellyGenLMS.Application.Services.Course
                             IsCompleted = isLessonFullyCompleted,
                             HasQuiz = quizForLesson != null,
                             QuizId = quizForLesson?.QuizId,
-                            IsQuizCompleted = isQuizCompletedForLesson,
+                            IsQuizCompleted = isQuizCompletedForLesson, // 🔥 FIXED: Any attempt counts
                             LastAttemptId = lastAttempt?.QuizAttemptId
                         });
                     }
@@ -250,7 +255,8 @@ namespace ExcellyGenLMS.Application.Services.Course
             return new DocumentProgressDto
             {
                 DocumentId = progress.DocumentId,
-                IsCompleted = progress.IsCompleted
+                IsCompleted = progress.IsCompleted,
+                CourseId = lesson.CourseId // ADD THIS LINE
             };
         }
 
@@ -302,6 +308,78 @@ namespace ExcellyGenLMS.Application.Services.Course
                 ActiveLearnersCount = course.Enrollments?.Count(e => e.Status == "active") ?? 0,
 
                 Lessons = new List<LearnerLessonDto>()
+            };
+        }
+
+        public async Task<LearnerCourseDto?> GetCoursePreviewAsync(string userId, int courseId)
+        {
+            _logger.LogInformation("Getting course preview for course {CourseId} and user {UserId}", courseId, userId);
+
+            // Check if user is already enrolled
+            var enrollment = await _enrollmentRepository.GetEnrollmentByUserIdAndCourseIdAsync(userId, courseId);
+            if (enrollment != null)
+            {
+                return null; // User is already enrolled, no preview needed
+            }
+
+            // Get the course with basic details
+            var course = await _courseRepository.GetByIdWithDetailsAsync(courseId);
+            if (course == null || course.IsInactive || course.Status.ToString() != "Published")
+            {
+                return null;
+            }
+
+            // Get lessons using the same pattern as existing code
+            var lessons = await _courseRepository.GetLessonsByCourseIdsAsync(new List<int> { courseId });
+            var courseLessons = lessons.Where(l => l.CourseId == courseId).ToList();
+
+            // Get quizzes using the same pattern as existing code
+            var quizzes = await _quizService.GetQuizzesByCourseIdsAsync(new List<int> { courseId });
+            var quizzesLookup = quizzes.ToLookup(q => q.LessonId);
+
+            var previewLessons = courseLessons.Select(lesson => new LearnerLessonDto
+            {
+                Id = lesson.Id,
+                LessonName = lesson.LessonName,
+                LessonPoints = lesson.LessonPoints,
+                LastUpdatedDate = lesson.LastUpdatedDate,
+                Documents = new List<CourseDocumentDto>(), // Empty - no access in preview
+                IsCompleted = false,
+                HasQuiz = quizzesLookup[lesson.Id].Any(), // Check if lesson has quiz using same pattern
+                QuizId = null, // No quiz access in preview
+                IsQuizCompleted = false,
+                LastAttemptId = null
+            }).ToList();
+
+            return new LearnerCourseDto
+            {
+                Id = course.Id,
+                Title = course.Title,
+                Description = course.Description,
+                EstimatedTime = course.EstimatedTime,
+                IsInactive = course.IsInactive,
+                ThumbnailUrl = course.ThumbnailImagePath != null ? _fileStorageService.GetFileUrl(course.ThumbnailImagePath) : string.Empty,
+                Creator = new UserBasicDto
+                {
+                    Id = course.Creator?.Id ?? "unknown",
+                    Name = course.Creator?.Name ?? "Unknown Creator"
+                },
+                Category = course.Category != null
+                    ? new CategoryDto { Id = course.Category.Id, Title = course.Category.Title }
+                    : new CategoryDto { Id = "uncategorized", Title = "Uncategorized" },
+                Technologies = course.CourseTechnologies?.Where(ct => ct.Technology != null)
+                    .Select(ct => new TechnologyDto { Id = ct.Technology.Id, Name = ct.Technology.Name })
+                    .ToList() ?? new List<TechnologyDto>(),
+                Status = course.Status,
+                IsEnrolled = false,
+                EnrollmentDate = null,
+                EnrollmentStatus = "not_enrolled",
+                EnrollmentId = null,
+                TotalLessons = courseLessons.Count,
+                CompletedLessons = 0,
+                ProgressPercentage = 0,
+                ActiveLearnersCount = course.Enrollments?.Count(e => e.Status == "active") ?? 0,
+                Lessons = previewLessons // Include lesson names but no content access
             };
         }
     }

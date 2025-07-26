@@ -110,7 +110,26 @@ namespace ExcellyGenLMS.API.Controllers.Course
             }
         }
 
-        // REMOVED: The old lesson completion endpoint is no longer needed
-        // [HttpPatch("lessons/{lessonId}/complete")] ...
+        [HttpGet("preview/{courseId}")]
+        public async Task<ActionResult<LearnerCourseDto>> GetCoursePreview(int courseId)
+        {
+            try
+            {
+                string userId = GetCurrentUserId();
+                var coursePreview = await _learnerCourseService.GetCoursePreviewAsync(userId, courseId);
+                if (coursePreview == null)
+                {
+                    return NotFound(new { message = $"Course with ID {courseId} not found or you are already enrolled." });
+                }
+                return Ok(coursePreview);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting course preview for {CourseId}", courseId);
+                return StatusCode(500, new { message = "An internal error occurred." });
+            }
+        }
+
+
     }
 }
