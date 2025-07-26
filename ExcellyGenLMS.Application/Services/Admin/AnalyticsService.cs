@@ -15,10 +15,10 @@ namespace ExcellyGenLMS.Application.Services.Admin
         private readonly IDbConnection _dbConnection;
         private readonly ILogger<AnalyticsService> _logger;
 
-        
+
         private class KpiQueryResult
         {
-            public string Name { get; set; }
+            public string? Name { get; set; }  // Made nullable since database queries might return null
             public int Count { get; set; }
         }
 
@@ -33,7 +33,7 @@ namespace ExcellyGenLMS.Application.Services.Admin
             try
             {
                 _logger.LogInformation("Getting KPI summary data.");
-                
+
                 string usersSql = "SELECT COUNT(*) FROM Users; SELECT COUNT(*) FROM Users WHERE Status = 'active';";
                 string coursesSql = "SELECT COUNT(*) FROM Courses;";
                 string enrollmentsSql = "SELECT COUNT(*) FROM Enrollments; SELECT COUNT(*) FROM Enrollments WHERE completion_date IS NOT NULL;";
@@ -101,7 +101,7 @@ namespace ExcellyGenLMS.Application.Services.Admin
                 var popularCourse = await _dbConnection.QueryFirstOrDefaultAsync<KpiQueryResult>(mostEnrolledCourseSql);
                 var completedCourse = await _dbConnection.QueryFirstOrDefaultAsync<KpiQueryResult>(mostCompletedCourseSql);
 
-                
+
                 return new EnrollmentKpiDto
                 {
                     MostPopularCategoryName = popularCategory?.Name,
@@ -152,7 +152,7 @@ namespace ExcellyGenLMS.Application.Services.Admin
                         WHERE c.CategoryId = @CategoryId
                         GROUP BY c.Id, c.Title
                         ORDER BY (SUM(CASE WHEN e.completion_date IS NULL THEN 1 ELSE 0 END) + SUM(CASE WHEN e.completion_date IS NOT NULL THEN 1 ELSE 0 END)) DESC";
-                    
+
                     var results = await _dbConnection.QueryAsync<EnrollmentChartItemDto>(enrollmentSql, new { CategoryId = categoryId });
                     enrollmentData = results.ToList();
                 }
@@ -183,7 +183,7 @@ namespace ExcellyGenLMS.Application.Services.Admin
                     ORDER BY Value DESC";
 
                 var availabilityData = await _dbConnection.QueryAsync<ChartDataDto>(sql);
-                
+
                 return new CourseAvailabilityDto
                 {
                     AvailabilityData = availabilityData.ToList()
