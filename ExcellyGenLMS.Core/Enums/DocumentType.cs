@@ -4,7 +4,8 @@ namespace ExcellyGenLMS.Core.Enums
     {
         PDF,
         Word,
-        Video // Keep optional video type from previous discussion
+        Video, // Keep optional video type from previous discussion
+        MP4    // Add this line to fix the error
         // Other types if added later...
     }
 }

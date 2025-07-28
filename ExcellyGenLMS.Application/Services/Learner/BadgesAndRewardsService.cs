@@ -69,11 +69,11 @@ namespace ExcellyGenLMS.Application.Services.Learner
                     await _badgeRepository.AddUserBadgeAsync(newUserBadge);
                     userBadges[badge.Id] = newUserBadge;
 
-                    
+
                     // TO TRIGGER THE NOTIFICATION
-                    
+
                     await _notificationService.CreateBadgeUnlockedNotificationAsync(userId, badge.Title);
-                    
+
                 }
 
                 result.Add(new BadgeDto
@@ -96,7 +96,7 @@ namespace ExcellyGenLMS.Application.Services.Learner
             return result;
         }
 
-        
+
         public async Task<BadgeDto> ClaimBadgeAsync(string userId, string badgeId)
         {
             var badge = (await _badgeRepository.GetAllBadgesAsync()).FirstOrDefault(b => b.Id == badgeId)
@@ -144,7 +144,7 @@ namespace ExcellyGenLMS.Application.Services.Learner
             int progress = 0;
             switch (badge.Id)
             {
-                
+
                 case "perfectionist":
                     var attempts = (await _quizAttemptRepository.GetAttemptsByUserIdAsync(userId))
                                    .Where(a => a.IsCompleted && a.CompletionTime.HasValue)
