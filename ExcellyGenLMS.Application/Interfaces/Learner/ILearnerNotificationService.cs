@@ -1,6 +1,8 @@
 // Path: ExcellyGenLMS.Application/Interfaces/Learner/ILearnerNotificationService.cs
 
 using ExcellyGenLMS.Application.DTOs.Learner;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace ExcellyGenLMS.Application.Interfaces.Learner
 {
@@ -18,5 +20,8 @@ namespace ExcellyGenLMS.Application.Interfaces.Learner
         Task CreateProjectAssignmentNotificationAsync(string employeeId, string projectId, string projectName, string role, int workloadPercentage, string assignerName);
         Task CreateProjectUpdateNotificationAsync(string employeeId, string projectId, string projectName, string updateType, string assignerName);
         Task CreateProjectRemovalNotificationAsync(string employeeId, string projectId, string projectName, string assignerName);
+
+        //  For badge unlock notifications
+        Task CreateBadgeUnlockedNotificationAsync(string userId, string badgeTitle);
     }
 }

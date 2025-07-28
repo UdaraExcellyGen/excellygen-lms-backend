@@ -1,6 +1,7 @@
 // Path: ExcellyGenLMS.Application/DTOs/Learner/LearnerNotificationDto.cs
 
 using System;
+using System.Collections.Generic;
 
 namespace ExcellyGenLMS.Application.DTOs.Learner
 {
@@ -10,9 +11,10 @@ namespace ExcellyGenLMS.Application.DTOs.Learner
         public string UserId { get; set; } = string.Empty;
         public string Title { get; set; } = string.Empty;
         public string Message { get; set; } = string.Empty;
-        public string Type { get; set; } = string.Empty; // "project_assignment", "project_update", etc.
+        public string Type { get; set; } = string.Empty; 
         public bool IsRead { get; set; }
-        public DateTime CreatedAt { get; set; }
+        // MODIFIED: This change is ESSENTIAL. It must be a string.
+        public string CreatedAt { get; set; } = string.Empty; 
         public string? ProjectId { get; set; }
         public string? ProjectName { get; set; }
         public string? AssignerName { get; set; }
