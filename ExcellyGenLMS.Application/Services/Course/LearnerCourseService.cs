@@ -64,8 +64,6 @@ namespace ExcellyGenLMS.Application.Services.Course
             return availableCourses;
         }
 
-        
-
         public async Task<IEnumerable<LearnerCourseDto>> GetEnrolledCoursesAsync(string userId)
         {
             try
@@ -252,12 +250,17 @@ namespace ExcellyGenLMS.Application.Services.Course
                 await _documentProgressRepository.UpdateAsync(progress);
             }
 
-            return new DocumentProgressDto
+            var result = new DocumentProgressDto
             {
                 DocumentId = progress.DocumentId,
                 IsCompleted = progress.IsCompleted,
-                CourseId = lesson.CourseId // ADD THIS LINE
+                CourseId = lesson.CourseId
             };
+
+            // 🚀 NEW: Auto-completion check after marking document complete
+            await CheckAndUpdateCourseCompletion(userId, lesson.CourseId);
+
+            return result;
         }
 
         public async Task<bool> HasLearnerCompletedAllCourseContentAsync(string userId, int courseId)
@@ -266,6 +269,34 @@ namespace ExcellyGenLMS.Application.Services.Course
             // Added more detailed logging
             _logger.LogInformation("Checking course completion for user {UserId}, course {CourseId}. Calculated Percentage: {Percentage}%", userId, courseId, details?.ProgressPercentage ?? -1);
             return details?.ProgressPercentage == 100;
+        }
+
+        // 🚀 NEW: Auto-completion logic for badge system
+        private async Task CheckAndUpdateCourseCompletion(string userId, int courseId)
+        {
+            try
+            {
+                // Get course details to check progress
+                var courseDetails = await GetLearnerCourseDetailsAsync(userId, courseId);
+
+                if (courseDetails != null && courseDetails.ProgressPercentage == 100)
+                {
+                    // Update enrollment to completed
+                    var enrollment = await _enrollmentRepository.GetEnrollmentByUserIdAndCourseIdAsync(userId, courseId);
+                    if (enrollment != null && enrollment.Status != "completed")
+                    {
+                        enrollment.Status = "completed";
+                        enrollment.CompletionDate = DateTime.UtcNow;
+                        await _enrollmentRepository.UpdateEnrollmentAsync(enrollment);
+
+                        _logger.LogInformation("🎉 Course {CourseId} automatically marked as completed for user {UserId}", courseId, userId);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error checking course completion for course {CourseId}, user {UserId}", courseId, userId);
+            }
         }
 
         // FIXED: Using Course namespace UserBasicDto, no ambiguity
