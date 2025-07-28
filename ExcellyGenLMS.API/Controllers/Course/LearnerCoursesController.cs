@@ -110,7 +110,53 @@ namespace ExcellyGenLMS.API.Controllers.Course
             }
         }
 
-        // REMOVED: The old lesson completion endpoint is no longer needed
-        // [HttpPatch("lessons/{lessonId}/complete")] ...
+        [HttpGet("preview/{courseId}")]
+        public async Task<ActionResult<LearnerCourseDto>> GetCoursePreview(int courseId)
+        {
+            try
+            {
+                string userId = GetCurrentUserId();
+                var coursePreview = await _learnerCourseService.GetCoursePreviewAsync(userId, courseId);
+                if (coursePreview == null)
+                {
+                    return NotFound(new { message = $"Course with ID {courseId} not found or you are already enrolled." });
+                }
+                return Ok(coursePreview);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting course preview for {CourseId}", courseId);
+                return StatusCode(500, new { message = "An internal error occurred." });
+            }
+        }
+
+        [HttpGet("category/{categoryId}")]
+        public async Task<ActionResult<object>> GetCoursesForCategory(string categoryId)
+        {
+            try
+            {
+                string userId = GetCurrentUserId();
+
+                // Get available courses for this category
+                var availableCourses = await _learnerCourseService.GetAvailableCoursesAsync(userId, categoryId);
+
+                // Get all enrolled courses, then filter by category
+                var allEnrolledCourses = await _learnerCourseService.GetEnrolledCoursesAsync(userId);
+                var categoryEnrolledCourses = allEnrolledCourses.Where(c => c.Category?.Id == categoryId);
+
+                return Ok(new
+                {
+                    available = availableCourses,
+                    categoryEnrolled = categoryEnrolledCourses
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting courses for category {CategoryId}", categoryId);
+                return StatusCode(500, new { message = "An error occurred while fetching courses." });
+            }
+        }
+
+
     }
 }

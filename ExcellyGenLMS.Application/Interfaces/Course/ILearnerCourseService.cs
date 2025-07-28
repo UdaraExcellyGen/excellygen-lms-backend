@@ -15,5 +15,6 @@ namespace ExcellyGenLMS.Application.Interfaces.Course
         Task<DocumentProgressDto> MarkDocumentCompletedAsync(string userId, int documentId);
 
         Task<bool> HasLearnerCompletedAllCourseContentAsync(string userId, int courseId);
+        Task<LearnerCourseDto?> GetCoursePreviewAsync(string userId, int courseId);
     }
 }

@@ -26,7 +26,31 @@ namespace ExcellyGenLMS.Application.Services.Learner
         public async Task<bool> MarkAllNotificationsAsReadAsync(string userId) { return await _notificationRepository.MarkAllAsReadAsync(userId); }
         public async Task<bool> DeleteNotificationAsync(int notificationId, string userId) { var notification = await _notificationRepository.GetByIdAsync(notificationId); if (notification?.UserId != userId) return false; return await _notificationRepository.DeleteAsync(notificationId); }
         public async Task CreateProjectAssignmentNotificationAsync(string employeeId, string projectId, string projectName, string role, int workloadPercentage, string assignerName) { var createDto = new CreateLearnerNotificationDto { UserId = employeeId, Title = "New Project Assignment", Message = $"You have been assigned to project '{projectName}' as {role} with {workloadPercentage}% workload by {assignerName}.", Type = "project_assignment", ProjectId = projectId, ProjectName = projectName, AssignerName = assignerName, Role = role, WorkloadPercentage = workloadPercentage }; await CreateNotificationAsync(createDto); _logger.LogInformation($"Created project assignment notification for employee {employeeId} on project {projectId}"); }
-        public async Task CreateProjectUpdateNotificationAsync(string employeeId, string projectId, string projectName, string updateType, string assignerName) { var createDto = new CreateLearnerNotificationDto { UserId = employeeId, Title = "Project Assignment Updated", Message = $"Your assignment to project '{projectName}' has been updated by {assignerName}. Update type: {updateType}", Type = "project_update", ProjectId = projectId, ProjectName = projectName, AssignerName = assignerName }; await CreateNotificationAsync(createDto); _logger.LogInformation($"Created project update notification for employee {employeeId} on project {projectId}"); }
+        
+   
+
+public async Task CreateProjectUpdateNotificationAsync(string employeeId, string projectId, string projectName, string updateType, string? role, int? workloadPercentage, string assignerName)
+{
+   
+    var message = $"Your assignment for project '{projectName}' has been updated by {assignerName}. Your {updateType} was changed.";
+    
+    var createDto = new CreateLearnerNotificationDto
+    {
+        UserId = employeeId,
+        Title = "Project Assignment Updated",
+        Message = message,
+        Type = "project_update",
+        ProjectId = projectId,
+        ProjectName = projectName,
+        AssignerName = assignerName,
+        Role = role, // The new role is still passed for the details view
+        WorkloadPercentage = workloadPercentage // The new workload is also passed
+    };
+
+    await CreateNotificationAsync(createDto);
+    _logger.LogInformation($"Created project update notification for employee {employeeId} on project {projectId}");
+}
+        
         public async Task CreateProjectRemovalNotificationAsync(string employeeId, string projectId, string projectName, string assignerName) { var createDto = new CreateLearnerNotificationDto { UserId = employeeId, Title = "Project Assignment Removed", Message = $"You have been removed from project '{projectName}' by {assignerName}.", Type = "project_removal", ProjectId = projectId, ProjectName = projectName, AssignerName = assignerName }; await CreateNotificationAsync(createDto); _logger.LogInformation($"Created project removal notification for employee {employeeId} on project {projectId}"); }
         public async Task CreateBadgeUnlockedNotificationAsync(string userId, string badgeTitle) { var createDto = new CreateLearnerNotificationDto { UserId = userId, Title = "New Badge Unlocked!", Message = $"Congratulations! You've unlocked the '{badgeTitle}' badge. You can claim it from the 'Badges & Rewards' page.", Type = "general" }; await CreateNotificationAsync(createDto); _logger.LogInformation($"Created badge unlocked notification for user {userId} for badge '{badgeTitle}'"); }
 

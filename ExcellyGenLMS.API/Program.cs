@@ -36,8 +36,8 @@ using ExcellyGenLMS.Application.Services.Course;
 using ExcellyGenLMS.Application.Services.Learner;
 using ExcellyGenLMS.Application.Services.ProjectManager;
 using ExcellyGenLMS.API.Middleware;
-using ExcellyGenLMS.Application.Services.Common; // ADDED THIS
-using ExcellyGenLMS.API.Workers;                 // ADDED THIS
+using ExcellyGenLMS.Application.Services.Common;
+using ExcellyGenLMS.API.Workers;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -57,7 +57,6 @@ try
     ConfigureControllers(builder);
     ConfigureSwagger(builder);
 
-    // ADDED THIS LINE - Registers the hosted service
     builder.Services.AddHostedService<ScheduledCleanupWorker>();
 
     // ===== BUILD APPLICATION =====
@@ -275,34 +274,45 @@ static void ConfigureSwagger(WebApplicationBuilder builder)
 
 static void RegisterRepositories(IServiceCollection services)
 {
+    // Auth Repositories
     services.AddScoped<IUserRepository, UserRepository>();
     services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
+
+    // Admin Repositories
     services.AddScoped<ITechnologyRepository, TechnologyRepository>();
     services.AddScoped<ICourseCategoryRepository, CourseCategoryRepository>();
     services.AddScoped<ICourseAdminRepository, CourseAdminRepository>();
+    services.AddScoped<IAnalyticsRepository, AnalyticsRepository>();
+
+    // Course Repositories
     services.AddScoped<ICourseRepository, CourseRepository>();
     services.AddScoped<ILessonRepository, LessonRepository>();
     services.AddScoped<ICourseDocumentRepository, CourseDocumentRepository>();
+    services.AddScoped<IDocumentProgressRepository, DocumentProgressRepository>();
     services.AddScoped<IEnrollmentRepository, EnrollmentRepository>();
     services.AddScoped<ILessonProgressRepository, LessonProgressRepository>();
-    services.AddScoped<IDocumentProgressRepository, DocumentProgressRepository>();
     services.AddScoped<ICertificateRepository, CertificateRepository>();
     services.AddScoped<IExternalCertificateRepository, ExternalCertificateRepository>();
     services.AddScoped<IQuizRepository, QuizRepository>();
     services.AddScoped<IQuizAttemptRepository, QuizAttemptRepository>();
+
+    // Learner Repositories
     services.AddScoped<IUserTechnologyRepository, UserTechnologyRepository>();
     services.AddScoped<IUserProjectRepository, UserProjectRepository>();
     services.AddScoped<IUserCertificationRepository, UserCertificationRepository>();
+    services.AddScoped<IUserBadgeRepository, UserBadgeRepository>();
     services.AddScoped<IForumThreadRepository, ForumThreadRepository>();
     services.AddScoped<IThreadCommentRepository, ThreadCommentRepository>();
     services.AddScoped<IThreadComReplyRepository, ThreadComReplyRepository>();
     services.AddScoped<ILearnerNotificationRepository, LearnerNotificationRepository>();
-    services.AddScoped<IProjectRepository, ProjectRepository>();
-    services.AddScoped<IRoleRepository, RoleRepository>();
-    services.AddScoped<IPMEmployeeAssignmentRepository, PMEmployeeAssignmentRepository>();
     services.AddScoped<ILeaderboardRepository, LeaderboardRepository>();
     services.AddScoped<IBadgeRepository, BadgeRepository>();
     services.AddScoped<IUserActivityLogRepository, UserActivityLogRepository>();
+
+    // Project Manager Repositories
+    services.AddScoped<IProjectRepository, ProjectRepository>();
+    services.AddScoped<IRoleRepository, RoleRepository>();
+    services.AddScoped<IPMEmployeeAssignmentRepository, PMEmployeeAssignmentRepository>();
 
     Console.WriteLine("Repository registrations completed.");
 }
@@ -316,19 +326,27 @@ static void RegisterApplicationServices(IServiceCollection services)
         options.CompactionPercentage = 0.25;
     });
 
+    // Auth Services
     services.AddScoped<IUserService, UserService>();
     services.AddScoped<IAuthService, AuthService>();
     services.AddScoped<IFirebaseAuthService, FirebaseAuthService>();
     services.AddScoped<ITokenService, TokenService>();
+
+    // Common Services
     services.AddScoped<IEmailService, EmailService>();
+    services.AddScoped<IFileStorageService, FirebaseStorageService>();
+    services.AddScoped<IFileService, FileService>();
+    services.AddScoped<IDataCleanupService, DataCleanupService>();
+
+    // Admin Services
     services.AddScoped<IUserManagementService, UserManagementService>();
     services.AddScoped<ITechnologyService, TechnologyService>();
     services.AddScoped<ICourseCategoryService, CourseCategoryService>();
     services.AddScoped<ICourseAdminService, CourseAdminService>();
     services.AddScoped<IDashboardService, DashboardService>();
     services.AddScoped<IAnalyticsService, AnalyticsService>();
-    services.AddScoped<IFileStorageService, FirebaseStorageService>();
-    services.AddScoped<IFileService, FileService>();
+
+    // Course Services
     services.AddScoped<ICourseService, CourseService>();
     services.AddScoped<IEnrollmentService, EnrollmentService>();
     services.AddScoped<ILearnerCourseService, LearnerCourseService>();
@@ -337,7 +355,10 @@ static void RegisterApplicationServices(IServiceCollection services)
     services.AddScoped<IExternalCertificateService, ExternalCertificateService>();
     services.AddScoped<IQuizService, QuizService>();
     services.AddScoped<IQuizAttemptService, QuizAttemptService>();
+
+    // Learner Services
     services.AddScoped<IUserBadgeService, UserBadgeService>();
+    services.AddScoped<IBadgesAndRewardsService, BadgesAndRewardsService>();
     services.AddScoped<IUserTechnologyService, UserTechnologyService>();
     services.AddScoped<IUserProjectService, UserProjectService>();
     services.AddScoped<IUserCertificationService, UserCertificationService>();
@@ -347,14 +368,12 @@ static void RegisterApplicationServices(IServiceCollection services)
     services.AddScoped<ICvService, CvService>();
     services.AddScoped<ILearnerNotificationService, LearnerNotificationService>();
     services.AddScoped<ILeaderboardService, LeaderboardService>();
+
+    // Project Manager Services
     services.AddScoped<IEmployeeAssignmentService, EmployeeAssignmentService>();
     services.AddScoped<ExcellyGenLMS.Application.Interfaces.ProjectManager.IProjectService, ExcellyGenLMS.Application.Services.ProjectManager.ProjectService>();
     services.AddScoped<ExcellyGenLMS.Application.Interfaces.ProjectManager.IRoleService, ExcellyGenLMS.Application.Services.ProjectManager.RoleService>();
     services.AddScoped<ExcellyGenLMS.Application.Interfaces.ProjectManager.IPMTechnologyService, ExcellyGenLMS.Application.Services.ProjectManager.PMTechnologyService>();
-    services.AddScoped<IBadgesAndRewardsService, BadgesAndRewardsService>();
-
-    // ADDED THIS LINE
-    services.AddScoped<IDataCleanupService, DataCleanupService>();
 
     Console.WriteLine("Application services registration completed.");
 }

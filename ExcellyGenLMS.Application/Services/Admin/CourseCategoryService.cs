@@ -1,4 +1,3 @@
-// ExcellyGenLMS.Application/Services/Admin/CourseCategoryService.cs
 using ExcellyGenLMS.Application.DTOs.Admin;
 using ExcellyGenLMS.Application.Interfaces.Admin;
 using ExcellyGenLMS.Core.Entities.Admin;
@@ -19,23 +18,51 @@ namespace ExcellyGenLMS.Application.Services.Admin
             _categoryRepository = categoryRepository;
         }
 
-        public async Task<List<CourseCategoryDto>> GetAllCategoriesAsync()
+        private CourseCategoryDto MapToDto(CourseCategory category, int? coursesCount = null, int? learnersCount = null, string? avgDuration = null)
         {
-            var categories = await _categoryRepository.GetAllCategoriesAsync();
-            var categoryDtos = new List<CourseCategoryDto>();
-
-            foreach (var category in categories)
+            return new CourseCategoryDto
             {
-                var coursesCount = await _categoryRepository.GetCoursesCountByCategoryIdAsync(category.Id);
-                var activeLearnersCount = await _categoryRepository.GetActiveLearnersCountByCategoryIdAsync(category.Id);
-                var avgDurationTimeSpan = await _categoryRepository.GetAverageCourseDurationByCategoryIdAsync(category.Id);
+                Id = category.Id,
+                Title = category.Title,
+                Description = category.Description,
+                Icon = category.Icon,
+                Status = category.Status,
+                IsDeleted = category.IsDeleted,
+                DeletedAt = category.DeletedAt,
+                CreatedAt = category.CreatedAt,
+                UpdatedAt = category.UpdatedAt,
+                CreatedBy = category.Creator?.Name ?? "System",
+                TotalCourses = coursesCount ?? category.Courses?.Count(c => !c.IsInactive) ?? 0,
+                ActiveLearnersCount = learnersCount ?? 0,
+                AvgDuration = avgDuration ?? "N/A",
+                RestoreAt = category.DeletedAt.HasValue ? category.DeletedAt.Value.AddDays(30) : null
+            };
+        }
 
-                string avgDurationString = avgDurationTimeSpan.HasValue
-                    ? $"{Math.Round(avgDurationTimeSpan.Value.TotalHours)} hours"
-                    : "N/A";
+        public async Task<List<CourseCategoryDto>> GetAllCategoriesAsync(bool includeDeleted = false)
+        {
+            var categories = await _categoryRepository.GetAllCategoryDetailsAsync(includeDeleted);
 
-                categoryDtos.Add(MapToDto(category, coursesCount, activeLearnersCount, avgDurationString));
-            }
+            var categoryDtos = categories.Select(category =>
+            {
+                var coursesCount = category.Courses?.Count(c => !c.IsInactive) ?? 0;
+
+                var activeLearnersCount = category.Courses?
+                    .SelectMany(c => c.Enrollments)
+                    .Select(e => e.UserId)
+                    .Distinct()
+                    .Count() ?? 0;
+
+                var validCourses = category.Courses?.Where(c => !c.IsInactive && c.EstimatedTime > 0).ToList() ?? new List<ExcellyGenLMS.Core.Entities.Course.Course>();
+                var avgDuration = "N/A";
+                if (validCourses.Any())
+                {
+                    var avgHours = validCourses.Average(c => c.EstimatedTime);
+                    avgDuration = $"{Math.Round(avgHours)} hours";
+                }
+
+                return MapToDto(category, coursesCount, activeLearnersCount, avgDuration);
+            }).ToList();
 
             return categoryDtos;
         }
@@ -45,87 +72,79 @@ namespace ExcellyGenLMS.Application.Services.Admin
             var category = await _categoryRepository.GetCategoryByIdAsync(id)
                 ?? throw new KeyNotFoundException($"Category with ID {id} not found");
 
-            var coursesCount = await _categoryRepository.GetCoursesCountByCategoryIdAsync(category.Id);
-            var activeLearnersCount = await _categoryRepository.GetActiveLearnersCountByCategoryIdAsync(category.Id);
-            var avgDurationTimeSpan = await _categoryRepository.GetAverageCourseDurationByCategoryIdAsync(category.Id);
+            var coursesCount = await _categoryRepository.GetCoursesCountByCategoryIdAsync(id);
+            var activeLearnersCount = await _categoryRepository.GetActiveLearnersCountByCategoryIdAsync(id);
+            var avgTimeSpan = await _categoryRepository.GetAverageCourseDurationByCategoryIdAsync(id);
+            var avgDuration = avgTimeSpan.HasValue ? $"{Math.Round(avgTimeSpan.Value.TotalHours)} hours" : "N/A";
 
-            string avgDurationString = avgDurationTimeSpan.HasValue
-                ? $"{Math.Round(avgDurationTimeSpan.Value.TotalHours)} hours"
-                : "N/A";
-
-            return MapToDto(category, coursesCount, activeLearnersCount, avgDurationString);
+            return MapToDto(category, coursesCount, activeLearnersCount, avgDuration);
         }
 
-        public async Task<CourseCategoryDto> CreateCategoryAsync(CreateCourseCategoryDto createCategoryDto)
+        public async Task<CourseCategoryDto> CreateCategoryAsync(CreateCourseCategoryDto dto, string creatorId)
         {
             var category = new CourseCategory
             {
-                Id = Guid.NewGuid().ToString(),
-                Title = createCategoryDto.Title,
-                Description = createCategoryDto.Description,
-                Icon = createCategoryDto.Icon,
-                Status = "active",
-                CreatedAt = DateTime.UtcNow
+                Title = dto.Title,
+                Description = dto.Description,
+                Icon = dto.Icon,
+                CreatedById = creatorId
             };
 
             var createdCategory = await _categoryRepository.CreateCategoryAsync(category);
-            return MapToDto(createdCategory, 0, 0, "N/A");
+            return await GetCategoryByIdAsync(createdCategory.Id);
         }
 
-        public async Task<CourseCategoryDto> UpdateCategoryAsync(string id, UpdateCourseCategoryDto updateCategoryDto)
+        public async Task<CourseCategoryDto> UpdateCategoryAsync(string id, UpdateCourseCategoryDto dto)
         {
             var category = await _categoryRepository.GetCategoryByIdAsync(id)
                 ?? throw new KeyNotFoundException($"Category with ID {id} not found");
 
-            category.Title = updateCategoryDto.Title;
-            category.Description = updateCategoryDto.Description;
-            category.Icon = updateCategoryDto.Icon;
-            category.Status = updateCategoryDto.Status;
+            category.Title = dto.Title;
+            category.Description = dto.Description;
+            category.Icon = dto.Icon;
+            category.Status = dto.Status;
 
-            var updatedCategory = await _categoryRepository.UpdateCategoryAsync(category);
-            var coursesCount = await _categoryRepository.GetCoursesCountByCategoryIdAsync(category.Id);
-            var activeLearnersCount = await _categoryRepository.GetActiveLearnersCountByCategoryIdAsync(category.Id);
-            var avgDurationTimeSpan = await _categoryRepository.GetAverageCourseDurationByCategoryIdAsync(category.Id);
-
-            string avgDurationString = avgDurationTimeSpan.HasValue
-                ? $"{Math.Round(avgDurationTimeSpan.Value.TotalHours)} hours"
-                : "N/A";
-
-            return MapToDto(updatedCategory, coursesCount, activeLearnersCount, avgDurationString);
+            await _categoryRepository.UpdateCategoryAsync(category);
+            return await GetCategoryByIdAsync(id);
         }
 
         public async Task DeleteCategoryAsync(string id)
         {
+            if (await _categoryRepository.HasActiveCoursesAsync(id))
+            {
+                throw new InvalidOperationException("Cannot delete category with active courses.");
+            }
+
             await _categoryRepository.DeleteCategoryAsync(id);
+        }
+
+        public async Task<CourseCategoryDto> RestoreCategoryAsync(string id)
+        {
+            var category = await _categoryRepository.RestoreCategoryAsync(id)
+                ?? throw new KeyNotFoundException($"Category with ID {id} not found or cannot be restored");
+
+            return await GetCategoryByIdAsync(category.Id);
         }
 
         public async Task<CourseCategoryDto> ToggleCategoryStatusAsync(string id)
         {
-            var category = await _categoryRepository.ToggleCategoryStatusAsync(id);
-            var coursesCount = await _categoryRepository.GetCoursesCountByCategoryIdAsync(category.Id);
-            var activeLearnersCount = await _categoryRepository.GetActiveLearnersCountByCategoryIdAsync(category.Id);
-            var avgDurationTimeSpan = await _categoryRepository.GetAverageCourseDurationByCategoryIdAsync(category.Id);
-
-            string avgDurationString = avgDurationTimeSpan.HasValue
-                ? $"{Math.Round(avgDurationTimeSpan.Value.TotalHours)} hours"
-                : "N/A";
-
-            return MapToDto(category, coursesCount, activeLearnersCount, avgDurationString);
+            await _categoryRepository.ToggleCategoryStatusAsync(id);
+            return await GetCategoryByIdAsync(id);
         }
 
-        private static CourseCategoryDto MapToDto(CourseCategory category, int coursesCount, int activeLearnersCount, string avgDuration)
+        public async Task<IEnumerable<CourseCategoryDto>> GetLearnerAccessibleCategoriesAsync(string learnerId)
         {
-            return new CourseCategoryDto
-            {
-                Id = category.Id,
-                Title = category.Title,
-                Description = category.Description,
-                Icon = category.Icon,
-                Status = category.Status,
-                TotalCourses = coursesCount,
-                ActiveLearnersCount = activeLearnersCount,
-                AvgDuration = avgDuration
-            };
+            var allCategories = await GetAllCategoriesAsync();
+            return allCategories.Where(c => c.Status == "active" && !c.IsDeleted);
+        }
+
+        public async Task<bool> HasUserEnrollmentsInCategoryAsync(string categoryId, string learnerId)
+        {
+            var category = await _categoryRepository.GetCategoryByIdAsync(categoryId);
+            if (category?.Courses == null)
+                return false;
+
+            return category.Courses.Any(c => c.Enrollments.Any(e => e.UserId == learnerId));
         }
     }
 }

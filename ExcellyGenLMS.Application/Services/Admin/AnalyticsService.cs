@@ -16,10 +16,10 @@ namespace ExcellyGenLMS.Application.Services.Admin
         private readonly IDbConnection _dbConnection;
         private readonly ILogger<AnalyticsService> _logger;
 
-        
+
         private class KpiQueryResult
         {
-            public string Name { get; set; } = string.Empty;
+            public string? Name { get; set; }
             public int Count { get; set; }
         }
 
@@ -35,7 +35,7 @@ namespace ExcellyGenLMS.Application.Services.Admin
             try
             {
                 _logger.LogInformation("Getting KPI summary data.");
-                
+
                 string usersSql = "SELECT COUNT(*) FROM Users; SELECT COUNT(*) FROM Users WHERE Status = 'active';";
                 string coursesSql = "SELECT COUNT(*) FROM Courses;";
                 string enrollmentsSql = "SELECT COUNT(*) FROM Enrollments; SELECT COUNT(*) FROM Enrollments WHERE completion_date IS NOT NULL;";
@@ -98,7 +98,8 @@ namespace ExcellyGenLMS.Application.Services.Admin
                 var popularCategory = await _dbConnection.QueryFirstOrDefaultAsync<KpiQueryResult>(mostEnrolledCategorySql);
                 var popularCourse = await _dbConnection.QueryFirstOrDefaultAsync<KpiQueryResult>(mostEnrolledCourseSql);
                 var completedCourse = await _dbConnection.QueryFirstOrDefaultAsync<KpiQueryResult>(mostCompletedCourseSql);
-                
+
+
                 return new EnrollmentKpiDto
                 {
                     MostPopularCategoryName = popularCategory?.Name,
@@ -129,15 +130,17 @@ namespace ExcellyGenLMS.Application.Services.Admin
                     WHERE c.Status = 'active'
                     GROUP BY c.Id, c.Title, c.Description, c.Icon, c.Status
                     ORDER BY c.Title";
+                
+                // Execute the categories query
                 var categories = await _dbConnection.QueryAsync<CourseCategoryDto>(categoriesSql);
 
-                string enrollmentSql;
-                object parameters;
+                
+                IEnumerable<EnrollmentChartItemDto> enrollmentData;
 
                 if (string.IsNullOrEmpty(categoryId))
                 {
                     _logger.LogInformation("Getting category-level enrollment analytics for drill-down chart.");
-                    enrollmentSql = @"
+                    string enrollmentSql = @"
                         WITH EnrollmentCounts AS (
                             SELECT
                                 c.CategoryId,
@@ -156,12 +159,14 @@ namespace ExcellyGenLMS.Application.Services.Admin
                         LEFT JOIN EnrollmentCounts ec ON cc.Id = ec.CategoryId
                         WHERE cc.Status = 'active'
                         ORDER BY (COALESCE(ec.Completed, 0) + COALESCE(ec.InProgress, 0)) DESC, cc.Title;";
-                    parameters = new { };
+                    
+                    // Execute the query with no parameters and assign the result
+                    enrollmentData = await _dbConnection.QueryAsync<EnrollmentChartItemDto>(enrollmentSql);
                 }
                 else
                 {
                      _logger.LogInformation("Getting course-level enrollment analytics for category: {CategoryId}", categoryId);
-                    enrollmentSql = @"
+                    string enrollmentSql = @"
                         SELECT 
                             c.Id,
                             c.Title AS Name, 
@@ -172,11 +177,12 @@ namespace ExcellyGenLMS.Application.Services.Admin
                         WHERE c.CategoryId = @CategoryId
                         GROUP BY c.Id, c.Title
                         ORDER BY (SUM(CASE WHEN e.completion_date IS NULL THEN 1 ELSE 0 END) + SUM(CASE WHEN e.completion_date IS NOT NULL THEN 1 ELSE 0 END)) DESC";
-                    parameters = new { CategoryId = categoryId };
+                    
+                    // Execute the query with parameters and assign the result
+                    enrollmentData = await _dbConnection.QueryAsync<EnrollmentChartItemDto>(enrollmentSql, new { CategoryId = categoryId });
                 }
                 
-                var enrollmentData = await _dbConnection.QueryAsync<EnrollmentChartItemDto>(enrollmentSql, parameters);
-
+                // Now, create the final DTO to return
                 return new EnrollmentAnalyticsDto
                 {
                     EnrollmentData = enrollmentData.ToList(),
@@ -189,6 +195,7 @@ namespace ExcellyGenLMS.Application.Services.Admin
                 throw;
             }
         }
+        
 
         public async Task<CourseAvailabilityDto> GetCourseAvailabilityAnalyticsAsync()
         {
@@ -203,7 +210,7 @@ namespace ExcellyGenLMS.Application.Services.Admin
                     ORDER BY Value DESC";
 
                 var availabilityData = await _dbConnection.QueryAsync<ChartDataDto>(sql);
-                
+
                 return new CourseAvailabilityDto
                 {
                     AvailabilityData = availabilityData.ToList()

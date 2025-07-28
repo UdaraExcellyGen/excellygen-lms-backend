@@ -1,5 +1,6 @@
 // ExcellyGenLMS.Application/DTOs/Admin/CourseCategoryDtos.cs
-using System.ComponentModel.DataAnnotations; // Needed for [Required], [StringLength] attributes
+using System;
+using System.ComponentModel.DataAnnotations;
 
 namespace ExcellyGenLMS.Application.DTOs.Admin
 {
@@ -13,7 +14,21 @@ namespace ExcellyGenLMS.Application.DTOs.Admin
         public string Status { get; set; } = string.Empty; // e.g., "active", "inactive"
         public int TotalCourses { get; set; } // Count of courses within this category
         public int ActiveLearnersCount { get; set; } // Count of unique active learners enrolled in courses of this category
-        public string AvgDuration { get; set; } = "N/A"; // Average estimated duration of courses in this category (e.g., "6 months", "20 hours")
+        public string AvgDuration { get; set; } = "N/A"; // Average estimated duration of courses in this category
+        public bool IsDeleted { get; set; } // To reflect soft-delete status
+        public DateTime? DeletedAt { get; set; } // To know when it was deleted
+        public DateTime? RestoreAt { get; set; } // To inform frontend of the 30-day recovery window
+
+        // NEW: Additional properties for enhanced learner experience
+        public bool HasUserEnrollments { get; set; } = false; // Whether current user has enrollments in this category
+        public string AccessReason { get; set; } = "active"; // "active", "enrolled", "admin" - why user can access this category
+
+        // NEW: Creator and date information
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public DateTime? UpdatedAt { get; set; }
+        public string CreatedAtFormatted => CreatedAt.ToString("MMM dd, yyyy");
+        public string UpdatedAtFormatted => UpdatedAt?.ToString("MMM dd, yyyy") ?? "Never";
+        public string CreatedBy { get; set; } = "System"; // Could be enhanced to show actual creator name
     }
 
     // DTO for creating a new Course Category

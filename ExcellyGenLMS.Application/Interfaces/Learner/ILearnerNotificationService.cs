@@ -18,7 +18,7 @@ namespace ExcellyGenLMS.Application.Interfaces.Learner
 
         // Specific notification creators
         Task CreateProjectAssignmentNotificationAsync(string employeeId, string projectId, string projectName, string role, int workloadPercentage, string assignerName);
-        Task CreateProjectUpdateNotificationAsync(string employeeId, string projectId, string projectName, string updateType, string assignerName);
+        Task CreateProjectUpdateNotificationAsync(string employeeId, string projectId, string projectName, string updateType,string? role, int? workloadPercentage,  string assignerName);
         Task CreateProjectRemovalNotificationAsync(string employeeId, string projectId, string projectName, string assignerName);
 
         //  For badge unlock notifications

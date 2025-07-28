@@ -4,5 +4,6 @@ namespace ExcellyGenLMS.Application.DTOs.Course
     {
         public int DocumentId { get; set; }
         public bool IsCompleted { get; set; }
+        public int CourseId { get; set; } // ADD THIS
     }
 }
