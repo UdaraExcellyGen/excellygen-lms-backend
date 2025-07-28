@@ -313,60 +313,83 @@ namespace ExcellyGenLMS.Application.Services.ProjectManager
             return createdAssignments.Select(MapToAssignmentDto);
         }
 
-        public async Task<EmployeeAssignmentDto?> UpdateEmployeeAssignmentAsync(int assignmentId, UpdateEmployeeAssignmentDto request)
+ public async Task<EmployeeAssignmentDto?> UpdateEmployeeAssignmentAsync(int assignmentId, UpdateEmployeeAssignmentDto request)
+{
+    _logger.LogInformation($"Updating assignment {assignmentId}");
+
+    var existingAssignment = await _assignmentRepository.GetByIdAsync(assignmentId);
+    if (existingAssignment == null)
+    {
+        return null;
+    }
+
+    
+    var changedFields = new List<string>();
+    if (existingAssignment.Role != request.Role)
+    {
+        changedFields.Add("role");
+    }
+    if (existingAssignment.WorkloadPercentage != request.WorkloadPercentage)
+    {
+        changedFields.Add("workload");
+    }
+
+    
+    if (!changedFields.Any())
+    {
+        _logger.LogInformation($"No changes detected for assignment {assignmentId}. Skipping update.");
+        return MapToAssignmentDto(existingAssignment); 
+    }
+   
+
+    // Calculate the workload change
+    var currentWorkload = await _assignmentRepository.GetEmployeeCurrentWorkloadAsync(existingAssignment.EmployeeId);
+    var workloadWithoutThisAssignment = currentWorkload - existingAssignment.WorkloadPercentage;
+    var newTotalWorkload = workloadWithoutThisAssignment + request.WorkloadPercentage;
+
+    // Validate that the new workload doesn't exceed 100%
+    if (newTotalWorkload > 100)
+    {
+        throw new InvalidOperationException($"Updated workload would exceed 100%. Current: {workloadWithoutThisAssignment}%, Requested: {request.WorkloadPercentage}%, Total: {newTotalWorkload}%");
+    }
+
+    // Get project details for notification
+    var project = await _projectRepository.GetByIdAsync(existingAssignment.ProjectId);
+
+    // Update the assignment
+    existingAssignment.Role = request.Role;
+    existingAssignment.WorkloadPercentage = request.WorkloadPercentage;
+
+    var updatedAssignment = await _assignmentRepository.UpdateAsync(existingAssignment);
+
+    // Create notification for the updated assignment
+    if (project != null)
+    {
+        try
         {
-            _logger.LogInformation($"Updating assignment {assignmentId}");
+            // Create a dynamic update type message based on what changed.
+            var updateTypeMessage = string.Join(" and ", changedFields);
 
-            var existingAssignment = await _assignmentRepository.GetByIdAsync(assignmentId);
-            if (existingAssignment == null)
-            {
-                return null;
-            }
+            await _notificationService.CreateProjectUpdateNotificationAsync(
+                employeeId: existingAssignment.EmployeeId,
+                projectId: existingAssignment.ProjectId,
+                projectName: project.Name,
+                updateType: updateTypeMessage, // e.g., "role", "workload", or "role and workload"
+                role: request.Role, 
+                workloadPercentage: request.WorkloadPercentage,
+                assignerName: project.Creator?.Name ?? "Project Manager"
+            );
 
-            // Calculate the workload change
-            var currentWorkload = await _assignmentRepository.GetEmployeeCurrentWorkloadAsync(existingAssignment.EmployeeId);
-            var workloadWithoutThisAssignment = currentWorkload - existingAssignment.WorkloadPercentage;
-            var newTotalWorkload = workloadWithoutThisAssignment + request.WorkloadPercentage;
-
-            // Validate that the new workload doesn't exceed 100%
-            if (newTotalWorkload > 100)
-            {
-                throw new InvalidOperationException($"Updated workload would exceed 100%. Current: {workloadWithoutThisAssignment}%, Requested: {request.WorkloadPercentage}%, Total: {newTotalWorkload}%");
-            }
-
-            // Get project details for notification
-            var project = await _projectRepository.GetByIdAsync(existingAssignment.ProjectId);
-
-            // Update the assignment
-            existingAssignment.Role = request.Role;
-            existingAssignment.WorkloadPercentage = request.WorkloadPercentage;
-
-            var updatedAssignment = await _assignmentRepository.UpdateAsync(existingAssignment);
-
-            // Create notification for the updated assignment
-            if (project != null)
-            {
-                try
-                {
-                    await _notificationService.CreateProjectUpdateNotificationAsync(
-                        employeeId: existingAssignment.EmployeeId,
-                        projectId: existingAssignment.ProjectId,
-                        projectName: project.Name,
-                        updateType: "Role and workload updated",
-                        assignerName: project.Creator?.Name ?? "Project Manager"
-                    );
-
-                    _logger.LogInformation($"Created update notification for assignment {assignmentId}");
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, $"Failed to create notification for assignment update {assignmentId}");
-                    // Don't fail the update if notification creation fails
-                }
-            }
-
-            return MapToAssignmentDto(updatedAssignment);
+            _logger.LogInformation($"Created '{updateTypeMessage}' update notification for assignment {assignmentId}");
         }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, $"Failed to create notification for assignment update {assignmentId}");
+        }
+    }
+
+    return MapToAssignmentDto(updatedAssignment);
+}
 
         public async Task<bool> RemoveEmployeeFromProjectAsync(int assignmentId)
         {

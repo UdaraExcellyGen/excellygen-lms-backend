@@ -1,4 +1,6 @@
-﻿using ExcellyGenLMS.Application.DTOs.Learner;
+﻿// Path: ExcellyGenLMS.Application/Services/Learner/BadgesAndRewardsService.cs
+
+using ExcellyGenLMS.Application.DTOs.Learner;
 using ExcellyGenLMS.Application.Interfaces.Learner;
 using ExcellyGenLMS.Core.Entities.Learner;
 using ExcellyGenLMS.Core.Interfaces.Repositories.Course;
@@ -8,8 +10,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using ExcellyGenLMS.Application.Interfaces.Common;
-using ExcellyGenLMS.Core.Entities.Notifications;
 
 namespace ExcellyGenLMS.Application.Services.Learner
 {
@@ -23,7 +23,7 @@ namespace ExcellyGenLMS.Application.Services.Learner
         private readonly IThreadComReplyRepository _threadComReplyRepository;
         private readonly ILeaderboardRepository _leaderboardRepository;
         private readonly ICourseRepository _courseRepository;
-        private readonly ILearnerNotificationService _notificationService;
+        private readonly ILearnerNotificationService _notificationService; // Already injected
         private readonly ILogger<BadgesAndRewardsService> _logger;
 
         public BadgesAndRewardsService(
@@ -69,7 +69,11 @@ namespace ExcellyGenLMS.Application.Services.Learner
                     await _badgeRepository.AddUserBadgeAsync(newUserBadge);
                     userBadges[badge.Id] = newUserBadge;
 
-                    // This logic is now handled by the frontend.
+                    
+                    // TO TRIGGER THE NOTIFICATION
+                    
+                    await _notificationService.CreateBadgeUnlockedNotificationAsync(userId, badge.Title);
+                    
                 }
 
                 result.Add(new BadgeDto
@@ -92,6 +96,7 @@ namespace ExcellyGenLMS.Application.Services.Learner
             return result;
         }
 
+        
         public async Task<BadgeDto> ClaimBadgeAsync(string userId, string badgeId)
         {
             var badge = (await _badgeRepository.GetAllBadgesAsync()).FirstOrDefault(b => b.Id == badgeId)
@@ -139,6 +144,7 @@ namespace ExcellyGenLMS.Application.Services.Learner
             int progress = 0;
             switch (badge.Id)
             {
+                
                 case "perfectionist":
                     var attempts = (await _quizAttemptRepository.GetAttemptsByUserIdAsync(userId))
                                    .Where(a => a.IsCompleted && a.CompletionTime.HasValue)
